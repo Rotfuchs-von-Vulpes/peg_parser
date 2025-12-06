@@ -7,11 +7,6 @@ import (
 
 func main() {
 	args := os.Args[1:]
-	// if len(args) > 0 {
-	// 	p := output.GetToyParser(args[0])
-	// 	fmt.Println(p.Parse())
-	// }
-
 	file, err := os.ReadFile(args[0])
 	if err != nil {
 		panic(err.Error())
