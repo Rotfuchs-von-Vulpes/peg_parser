@@ -12,11 +12,11 @@ type Node struct {
 }
 
 type Peg struct {
-	parser parser.Parser
+	parser parser.Tokenizer
 }
 
 func GetPegParser(text string) Peg {
-	return Peg{parser.GetParser(text)}
+	return Peg{parser.GetTokenizer(text)}
 }
 
 func (s *Peg) grammar() Node {

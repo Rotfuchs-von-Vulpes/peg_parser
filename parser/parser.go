@@ -35,7 +35,7 @@ type Tokenizer struct {
 	pos      int
 }
 
-func getTokenizer(text string) Tokenizer {
+func GetTokenizer(text string) Tokenizer {
 	return Tokenizer{
 		getTokengen(text),
 		[]rune{},
@@ -50,37 +50,21 @@ func (s *Tokenizer) peekRune() rune {
 	return s.runes[s.pos]
 }
 
-func (s *Tokenizer) mark() int {
-	return s.pos
-}
-
-func (s *Tokenizer) reset(p int) {
-	s.pos = p
-}
-
 func (s *Tokenizer) getRune() rune {
 	r := s.peekRune()
 	s.pos = s.pos + 1
 	return r
 }
 
-type Parser struct {
-	tokenizer Tokenizer
+func (s *Tokenizer) Mark() int {
+	return s.pos
 }
 
-func GetParser(text string) Parser {
-	return Parser{getTokenizer(text)}
+func (s *Tokenizer) Reset(p int) {
+	s.pos = p
 }
 
-func (s *Parser) Mark() int {
-	return s.tokenizer.mark()
-}
-
-func (s *Parser) Reset(p int) {
-	s.tokenizer.reset(p)
-}
-
-func (s *Parser) Expect(arg rune) bool {
+func (s *Tokenizer) Expect(arg rune) bool {
 	if arg == 0 {
 		for {
 			if ok := s.Expect(' '); ok {
@@ -93,24 +77,24 @@ func (s *Parser) Expect(arg rune) bool {
 			break
 		}
 	}
-	r := s.tokenizer.peekRune()
+	r := s.peekRune()
 	if r == arg {
-		s.tokenizer.pos += 1
+		s.pos += 1
 		return true
 	}
 	return false
 }
 
-func (s *Parser) Rune() (bool, rune) {
-	r := s.tokenizer.peekRune()
+func (s *Tokenizer) Rune() (bool, rune) {
+	r := s.peekRune()
 	if r == 0 {
 		return false, 0
 	} else {
-		return true, s.tokenizer.getRune()
+		return true, s.getRune()
 	}
 }
 
-func (s *Parser) String(arg string) bool {
+func (s *Tokenizer) String(arg string) bool {
 	if arg == "" {
 		return false
 	}
@@ -133,25 +117,25 @@ func (s *Parser) String(arg string) bool {
 	return true
 }
 
-func (s *Parser) LowLetter() (bool, rune) {
-	r := s.tokenizer.peekRune()
+func (s *Tokenizer) LowLetter() (bool, rune) {
+	r := s.peekRune()
 	if r < 'a' || r > 'z' {
 		return false, 0
 	} else {
-		return true, s.tokenizer.getRune()
+		return true, s.getRune()
 	}
 }
 
-func (s *Parser) HighLetter() (bool, rune) {
-	r := s.tokenizer.peekRune()
+func (s *Tokenizer) HighLetter() (bool, rune) {
+	r := s.peekRune()
 	if r < 'A' || r > 'Z' {
 		return false, 0
 	} else {
-		return true, s.tokenizer.getRune()
+		return true, s.getRune()
 	}
 }
 
-func (s *Parser) Letter() (bool, rune) {
+func (s *Tokenizer) Letter() (bool, rune) {
 	if ok, r := s.HighLetter(); !ok {
 		if ok, r := s.LowLetter(); ok {
 			return true, r
@@ -163,16 +147,16 @@ func (s *Parser) Letter() (bool, rune) {
 	}
 }
 
-func (s *Parser) Num() (bool, rune) {
-	r := s.tokenizer.peekRune()
+func (s *Tokenizer) Num() (bool, rune) {
+	r := s.peekRune()
 	if (r < '1' || r > '9') && r != '0' {
 		return false, 0
 	} else {
-		return true, s.tokenizer.getRune()
+		return true, s.getRune()
 	}
 }
 
-func (s *Parser) Number() (bool, string) {
+func (s *Tokenizer) Number() (bool, string) {
 	name := strings.Builder{}
 	no_point := false
 	for {
@@ -192,7 +176,7 @@ func (s *Parser) Number() (bool, string) {
 	}
 }
 
-func (s *Parser) Name() (bool, string) {
+func (s *Tokenizer) Name() (bool, string) {
 	name := strings.Builder{}
 	for {
 		if ok, r := s.Letter(); ok {

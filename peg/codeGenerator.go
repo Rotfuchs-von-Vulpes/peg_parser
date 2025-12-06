@@ -361,11 +361,11 @@ type Node struct {
 }
 
 type @1 struct {
-	parser parser.Parser
+	parser parser.Tokenizer
 }
 
 func Get@1Parser(text string) @1 {
-	return @1{parser.GetParser(text)}
+	return @1{parser.GetTokenizer(text)}
 }
 
 `
