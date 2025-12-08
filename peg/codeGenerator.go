@@ -378,5 +378,6 @@ func Get@1Parser(text string) @1 {
 		finalProg += rule.program + "\n\n"
 	}
 	finalProg += "func (s *" + s.lang + ") Parse() Node {\n\treturn s." + s.data.children[0].value + "()\n}"
+	os.Remove(fmt.Sprintf(path+"%s/%s.go", name, name))
 	os.WriteFile(fmt.Sprintf(path+"%s/%s.go", name, name), []byte(finalProg), fs.ModeAppend)
 }
