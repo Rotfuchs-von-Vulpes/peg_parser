@@ -71,8 +71,12 @@ func (s *RuleProg) writeReturn() {
 	}
 }
 
-func (s *RuleProg) writeMark() {
-	s.write("@3pos := s.parser.Mark()@1")
+func (s *RuleProg) writeMark(old bool) {
+	if old {
+		s.write("@3pos = s.parser.Mark()@1")
+	} else {
+		s.write("@3pos := s.parser.Mark()@1")
+	}
 }
 
 func (s *RuleProg) writeNewPos() {
@@ -110,14 +114,25 @@ func (s *RuleProg) addRule(rule string, add bool) {
 	}
 }
 
-func (s *RuleProg) addString(str string) {
+func (s *RuleProg) addString(str string, add bool) {
 	if str == "" {
 		panic("empty string")
 	}
-	if str == "\"" {
-		str = "\\\""
+	final := strings.Builder{}
+	for _, r := range str {
+		switch r {
+		case '\\':
+			final.WriteString("\\\\")
+		case '"':
+			final.WriteString("\\\"")
+		default:
+			final.WriteRune(r)
+		}
 	}
-	s.writeIf(fmt.Sprintf("if ok := s.parser.String(\"%s\"); ok", str))
+	s.writeIf(fmt.Sprintf("if ok := s.parser.String(\"%s\"); ok", final.String()))
+	if add {
+		s.write(fmt.Sprintf("@3nodes = append(nodes, Node{\"string\", \"%s\", []Node{}})@1", final.String()))
+	}
 }
 
 func (s *RuleProg) addLiteral(literal string) {
@@ -161,7 +176,7 @@ func getUnexpectedTypeError(want string, get string) string {
 	return fmt.Sprintf("This is what you want: %s, this is what you get: %s", want, get)
 }
 
-func (s *RuleProg) item(item Node) {
+func (s *RuleProg) item(item Node, variable bool) {
 	if item.typ != "item" {
 		panic(getUnexpectedTypeError("item", item.typ))
 	}
@@ -174,8 +189,8 @@ func (s *RuleProg) item(item Node) {
 	switch child.typ {
 	case "name":
 		s.addRule(child.value, false)
-	case "string":
-		s.addString(child.value)
+	case "chars":
+		s.addString(child.value, variable)
 	case "literal":
 		s.addLiteral(child.value)
 	default:
@@ -183,7 +198,7 @@ func (s *RuleProg) item(item Node) {
 	}
 }
 
-func (s *RuleProg) atom(atom Node) bool {
+func (s *RuleProg) atom(atom Node, variable bool) bool {
 	if atom.typ != "atom" {
 		panic(getUnexpectedTypeError("atom", atom.typ))
 	}
@@ -196,11 +211,11 @@ func (s *RuleProg) atom(atom Node) bool {
 	child := atom.children[0]
 	switch child.typ {
 	case "item":
-		s.item(child)
+		s.item(child, variable)
 	case "name":
 		s.addRule(child.value, false)
-	case "string":
-		s.addString(child.value)
+	case "chars":
+		s.addString(child.value, variable)
 	case "literal":
 		s.addLiteral(child.value)
 	case "body":
@@ -213,7 +228,7 @@ func (s *RuleProg) atom(atom Node) bool {
 	return final
 }
 
-func (s *RuleProg) loop(loop Node) {
+func (s *RuleProg) loop(loop Node, various, pos_is_added bool) bool {
 	if loop.typ != "loop" {
 		panic(getUnexpectedTypeError("loop", loop.typ))
 	}
@@ -222,51 +237,56 @@ func (s *RuleProg) loop(loop Node) {
 	} else if len(loop.children) != 1 {
 		panic("too much loop")
 	}
+	add_pos := pos_is_added
 	switch loop.value {
 	case "":
-		s.atom(loop.children[0])
+		s.atom(loop.children[0], various)
 	case "?":
-		s.atom(loop.children[0])
+		s.atom(loop.children[0], true)
 		s.writeReturn()
 		s.writeCloseCatcher()
 	case "*":
 		child := loop.children[0]
-		s.writeMark()
+		s.writeMark(add_pos)
 		s.writeRuleFor()
-		s.atom(child)
+		s.atom(child, various)
 		s.writeNewPos()
 		s.close()
 		s.writeElseBreak()
 		s.writeReset()
 		s.writeCloseCatcher()
+		add_pos = true
 	case "+":
 		child := loop.children[0]
-		sub := s.atom(child)
-		s.writeMark()
+		sub := s.atom(child, various)
+		s.writeMark(add_pos)
 		s.writeRuleFor()
 		if sub {
 			s.addRule(s.name+"_"+strconv.Itoa(s.subRuleCount), true)
 		} else {
-			s.atom(child)
+			s.atom(child, various)
 		}
 		s.writeNewPos()
 		s.close()
 		s.writeElseBreak()
 		s.writeReset()
+		add_pos = true
 	default:
 		panic("unknow repeat operator")
 	}
+	return add_pos
 }
 
-func (s *RuleProg) alt(alt Node) {
+func (s *RuleProg) alt(alt Node, variable bool) {
 	if alt.typ != "alts" {
 		panic(getUnexpectedTypeError("alts", alt.typ))
 	}
 	if len(alt.children) == 0 {
 		panic("zero loop as unexpected")
 	}
+	add_pos := false
 	for _, loop := range alt.children {
-		s.loop(loop)
+		add_pos = s.loop(loop, variable, add_pos)
 	}
 	for i := range alt.children {
 		if i == 0 {
@@ -285,13 +305,27 @@ func (s *RuleProg) body(body Node) {
 		panic("no body children as unexpected")
 	}
 	if len(body.children) > 1 {
-		s.writeMark()
+		variable := false
 		for _, alt := range body.children {
-			s.alt(alt)
+			if len(alt.children) == 1 {
+				loop := alt.children[0]
+				atom := loop.children[0]
+				if atom.children[0].typ == "item" {
+					item := atom.children[0]
+					if item.children[0].typ == "chars" {
+						variable = true
+						break
+					}
+				}
+			}
+		}
+		s.writeMark(false)
+		for _, alt := range body.children {
+			s.alt(alt, variable)
 			s.writeReset()
 		}
 	} else {
-		s.alt(body.children[0])
+		s.alt(body.children[0], false)
 	}
 }
 
@@ -378,6 +412,7 @@ func Get@1Parser(text string) @1 {
 		finalProg += rule.program + "\n\n"
 	}
 	finalProg += "func (s *" + s.lang + ") Parse() Node {\n\treturn s." + s.data.children[0].value + "()\n}"
+	os.Mkdir(path+name+"/", os.ModePerm)
 	os.Remove(fmt.Sprintf(path+"%s/%s.go", name, name))
 	os.WriteFile(fmt.Sprintf(path+"%s/%s.go", name, name), []byte(finalProg), fs.ModeAppend)
 }

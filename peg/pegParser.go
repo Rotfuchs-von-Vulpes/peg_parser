@@ -152,7 +152,7 @@ func (s *Peg) item() Node {
 	if name := s.name(); name.typ != "" {
 		return Node{"item", "", []Node{name}}
 	}
-	if str := s.string(); str.typ != "" {
+	if str := s.chars(); str.typ != "" {
 		return Node{"item", "", []Node{str}}
 	}
 	return Node{}
@@ -175,7 +175,7 @@ func (s *Peg) name() Node {
 	return Node{}
 }
 
-func (s *Peg) string() Node {
+func (s *Peg) chars() Node {
 	str := strings.Builder{}
 	pos := s.parser.Mark()
 	if ok := s.parser.Expect('"'); ok {
@@ -195,7 +195,7 @@ func (s *Peg) string() Node {
 		s.parser.Reset(pos)
 		if ok := s.parser.Expect('"'); ok {
 			if str.Len() > 0 {
-				return Node{"string", str.String(), []Node{}}
+				return Node{"chars", str.String(), []Node{}}
 			}
 		}
 	}
@@ -217,7 +217,7 @@ func (s *Peg) string() Node {
 		s.parser.Reset(pos)
 		if ok := s.parser.Expect('\''); ok {
 			if str.Len() > 0 {
-				return Node{"string", str.String(), []Node{}}
+				return Node{"chars", str.String(), []Node{}}
 			}
 		}
 	}
