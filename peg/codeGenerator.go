@@ -14,7 +14,6 @@ type RuleProg struct {
 	name         string
 	program      string
 	tabs         int
-	pointCount   int
 	subRuleCount int
 }
 
@@ -46,7 +45,6 @@ func (s *RuleProg) write(code string) {
 	} else {
 		fmt.Println("Não existe code point para inserir codigo, regra: " + s.name + ", codigo: " + code)
 	}
-	s.pointCount = strings.Count(s.program, "@1")
 }
 
 func (s *RuleProg) create() {
@@ -344,7 +342,7 @@ func GetPegCompiler(data Node, lang string) PegCompiler {
 }
 
 func newRule(lang, name string) RuleProg {
-	r := RuleProg{[]RuleProg{}, lang, name, "", 1, 0, 0}
+	r := RuleProg{[]RuleProg{}, lang, name, "", 1, 0}
 	r.create()
 	return r
 }
