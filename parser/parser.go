@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"main/regex"
 	"strings"
 )
@@ -193,19 +194,47 @@ func (s *Tokenizer) Name() (bool, string) {
 	}
 }
 
-func (s *Tokenizer) Regex(rule string) string {
+func (s *Tokenizer) Regex(rule string) (bool, string) {
+	// speak := false
+	// if rule == "[(\\r|\\n| |\\t)*]" {
+	// 	fmt.Println("oi")
+	// 	speak = true
+	// }
 	buffer := strings.Builder{}
 	cuttoff := false
+	if regex.Run(rule, "") {
+		cuttoff = true
+	}
+	pos := s.Mark()
 	for {
-		if regex.Run(rule, buffer.String()) {
-			cuttoff = true
-		} else if cuttoff {
-			return buffer.String()
-		}
 		if ok, r := s.Rune(); ok {
+			if regex.Run(rule, buffer.String()+string(r)) {
+				cuttoff = true
+			} else if cuttoff {
+				s.Reset(pos)
+				return true, buffer.String()
+			}
+			pos = s.Mark()
 			buffer.WriteRune(r)
 		} else {
-			return buffer.String()
+			if cuttoff {
+				return true, buffer.String()
+			} else {
+				return false, ""
+			}
 		}
 	}
+}
+
+func (s *Tokenizer) Blame() {
+	final := strings.Builder{}
+	for {
+		if ok, r := s.Rune(); ok {
+			final.WriteRune(r)
+		} else {
+			break
+		}
+	}
+	fmt.Println(final.Len())
+	fmt.Println(final.String())
 }

@@ -189,7 +189,7 @@ func (s *RuleProg) addRegex(regex Node) {
 	if regex.value == "" {
 		panic("empty regex code")
 	}
-	s.writeIf("if str := s.parser.Regex(\"" + bakeString(regex.value) + "\"); str != \"\"")
+	s.writeIf("if ok, str := s.parser.Regex(\"" + bakeString(regex.value) + "\"); ok")
 	s.write("@3nodes = append(nodes, Node{\"string\", str, []Node{}})@1")
 }
 
@@ -348,7 +348,9 @@ func (s *RuleProg) body(body Node) {
 			s.writeReset()
 		}
 	} else {
+		s.writeMark(false)
 		s.alt(body.children[0], false)
+		s.writeReset()
 	}
 }
 
