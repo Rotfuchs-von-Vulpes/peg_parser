@@ -32,6 +32,7 @@ func main() {
 					if regex.UseStack(s, args[2]) {
 						fmt.Println("true")
 					} else {
+						fmt.Println("false")
 					}
 				}
 			}
