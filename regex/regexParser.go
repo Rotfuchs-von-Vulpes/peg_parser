@@ -1,9 +1,5 @@
 package regex
 
-import (
-	"main/parser"
-)
-
 type Node struct {
 	Typ      string
 	Value    string
@@ -11,11 +7,11 @@ type Node struct {
 }
 
 type Regex struct {
-	parser parser.Tokenizer
+	parser Tokenizer
 }
 
 func GetRegexParser(text string) Regex {
-	return Regex{parser.GetTokenizer(text)}
+	return Regex{GetTokenizer(text)}
 }
 
 func (s *Regex) regex() Node {
@@ -126,6 +122,10 @@ func (s *Regex) atom() Node {
 	pos := s.parser.Mark()
 	if char := s.char(); char.Typ != "" {
 		nodes = append(nodes, char)
+		if ok := s.parser.String("!"); ok {
+			nodes = append(nodes, Node{"string", "!", []Node{}})
+			return Node{"atom", "", nodes}
+		}
 		return Node{"atom", "", nodes}
 	}
 	s.parser.Reset(pos)

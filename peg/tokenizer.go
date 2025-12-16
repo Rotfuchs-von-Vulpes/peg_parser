@@ -1,9 +1,4 @@
-package parser
-
-import (
-	"main/regex"
-	"strings"
-)
+package peg
 
 type Tokengen struct {
 	text  string
@@ -94,26 +89,6 @@ func (s *Tokenizer) Rune() (bool, rune) {
 	}
 }
 
-func (s *Tokenizer) String(arg string) bool {
-	if arg == "" {
-		return false
-	}
-	pos := s.Mark()
-	for _, r1 := range arg {
-		ok, r2 := s.Rune()
-		if ok {
-			if r1 != r2 {
-				s.Reset(pos)
-				return false
-			}
-		} else {
-			s.Reset(pos)
-			return false
-		}
-	}
-	return true
-}
-
 func (s *Tokenizer) LowLetter() (bool, rune) {
 	r := s.peekRune()
 	if r < 'a' || r > 'z' {
@@ -153,59 +128,22 @@ func (s *Tokenizer) Num() (bool, rune) {
 	}
 }
 
-func (s *Tokenizer) Number() (bool, string) {
-	name := strings.Builder{}
-	no_point := false
-	for {
-		if ok, r := s.Num(); ok {
-			name.WriteRune(r)
-		} else if ok := s.Expect('.'); ok && !no_point {
-			no_point = true
-			name.WriteRune('.')
+func (s *Tokenizer) String(arg string) bool {
+	if arg == "" {
+		return false
+	}
+	pos := s.Mark()
+	for _, r1 := range arg {
+		ok, r2 := s.Rune()
+		if ok {
+			if r1 != r2 {
+				s.Reset(pos)
+				return false
+			}
 		} else {
-			break
+			s.Reset(pos)
+			return false
 		}
 	}
-	if name.Len() > 0 {
-		return true, name.String()
-	} else {
-		return false, ""
-	}
-}
-
-func (s *Tokenizer) Name() (bool, string) {
-	name := strings.Builder{}
-	for {
-		if ok, r := s.Letter(); ok {
-			name.WriteRune(r)
-		} else if ok, r := s.Num(); ok {
-			name.WriteRune(r)
-		} else if ok := s.Expect('_'); ok {
-			name.WriteRune('_')
-		} else {
-			break
-		}
-	}
-	if name.Len() > 0 {
-		return true, name.String()
-	} else {
-		return false, ""
-	}
-}
-
-func (s *Tokenizer) Regex(rule string) string {
-	buffer := strings.Builder{}
-	cuttoff := false
-	for {
-		if regex.Run(rule, buffer.String()) {
-			cuttoff = true
-		} else if cuttoff {
-			return buffer.String()
-		}
-		if ok, r := s.Rune(); ok {
-			buffer.WriteRune(r)
-		} else {
-			return buffer.String()
-		}
-	}
+	return true
 }

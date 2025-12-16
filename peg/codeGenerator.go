@@ -170,6 +170,29 @@ func (s *RuleProg) addSubRule(body Node) {
 	s.subRules = append(s.subRules, subRule)
 }
 
+func bakeString(str string) string {
+	final := strings.Builder{}
+	for _, r := range str {
+		switch r {
+		case '"':
+			final.WriteString("\\\"")
+		case '\\':
+			final.WriteString("\\\\")
+		default:
+			final.WriteRune(r)
+		}
+	}
+	return final.String()
+}
+
+func (s *RuleProg) addRegex(regex Node) {
+	if regex.value == "" {
+		panic("empty regex code")
+	}
+	s.writeIf("if str := s.parser.Regex(\"" + bakeString(regex.value) + "\"); str != \"\"")
+	s.write("@3nodes = append(nodes, Node{\"string\", str, []Node{}})@1")
+}
+
 func getUnexpectedTypeError(want string, get string) string {
 	return fmt.Sprintf("This is what you want: %s, this is what you get: %s", want, get)
 }
@@ -191,6 +214,8 @@ func (s *RuleProg) item(item Node, variable bool) {
 		s.addString(child.value, variable)
 	case "literal":
 		s.addLiteral(child.value)
+	case "regex":
+		s.addRegex(child)
 	default:
 		panic(fmt.Sprintf("item has illegal child: %s", child.typ))
 	}

@@ -1,7 +1,6 @@
 package peg
 
 import (
-	"main/parser"
 	"strings"
 )
 
@@ -12,11 +11,11 @@ type Node struct {
 }
 
 type Peg struct {
-	parser parser.Tokenizer
+	parser Tokenizer
 }
 
 func GetPegParser(text string) Peg {
-	return Peg{parser.GetTokenizer(text)}
+	return Peg{GetTokenizer(text)}
 }
 
 func (s *Peg) grammar() Node {
@@ -155,6 +154,27 @@ func (s *Peg) item() Node {
 	if str := s.chars(); str.typ != "" {
 		return Node{"item", "", []Node{str}}
 	}
+	if regex := s.regex(); regex.typ != "" {
+		return Node{"item", "", []Node{regex}}
+	}
+	return Node{}
+}
+
+func (s *Peg) regex() Node {
+	code := strings.Builder{}
+	if ok := s.parser.Expect('['); ok {
+		code.WriteRune('[')
+		for {
+			if ok, r := s.parser.Rune(); ok {
+				code.WriteRune(r)
+				if r == ']' {
+					return Node{"regex", code.String(), []Node{}}
+				}
+			} else {
+				break
+			}
+		}
+	}
 	return Node{}
 }
 
@@ -162,6 +182,8 @@ func (s *Peg) name() Node {
 	name := strings.Builder{}
 	for {
 		if ok, r := s.parser.Letter(); ok {
+			name.WriteRune(r)
+		} else if ok, r := s.parser.Num(); ok {
 			name.WriteRune(r)
 		} else if ok := s.parser.Expect('_'); ok {
 			name.WriteRune('_')
