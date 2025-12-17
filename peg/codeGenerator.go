@@ -266,7 +266,7 @@ func (s *RuleProg) loop(loop Node, various, pos_is_added bool) bool {
 		s.atom(loop.children[0], various)
 	case "?":
 		s.atom(loop.children[0], true)
-		s.writeReturn()
+		s.close()
 		s.writeCloseCatcher()
 	case "*":
 		child := loop.children[0]
