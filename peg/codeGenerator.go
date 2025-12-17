@@ -186,10 +186,10 @@ func bakeString(str string) string {
 }
 
 func (s *RuleProg) addRegex(regex Node) {
-	if regex.value == "" {
+	if regex.Value == "" {
 		panic("empty regex code")
 	}
-	s.writeIf("if ok, str := s.parser.Regex(\"" + bakeString(regex.value) + "\"); ok")
+	s.writeIf("if ok, str := s.parser.Regex(\"" + bakeString(regex.Value) + "\"); ok")
 	s.write("@3nodes = append(nodes, Node{\"string\", str, []Node{}})@1")
 }
 
@@ -198,78 +198,78 @@ func getUnexpectedTypeError(want string, get string) string {
 }
 
 func (s *RuleProg) item(item Node, variable bool) {
-	if item.typ != "item" {
-		panic(getUnexpectedTypeError("item", item.typ))
+	if item.Typ != "item" {
+		panic(getUnexpectedTypeError("item", item.Typ))
 	}
-	if len(item.children) == 0 {
+	if len(item.Children) == 0 {
 		panic("no item child as unexpected")
-	} else if len(item.children) != 1 {
+	} else if len(item.Children) != 1 {
 		panic("too much item children")
 	}
-	child := item.children[0]
-	switch child.typ {
+	child := item.Children[0]
+	switch child.Typ {
 	case "name":
-		s.addRule(child.value, false)
+		s.addRule(child.Value, false)
 	case "chars":
-		s.addString(child.value, variable)
+		s.addString(child.Value, variable)
 	case "literal":
-		s.addLiteral(child.value)
+		s.addLiteral(child.Value)
 	case "regex":
 		s.addRegex(child)
 	default:
-		panic(fmt.Sprintf("item has illegal child: %s", child.typ))
+		panic(fmt.Sprintf("item has illegal child: %s", child.Typ))
 	}
 }
 
 func (s *RuleProg) atom(atom Node, variable bool) bool {
-	if atom.typ != "atom" {
-		panic(getUnexpectedTypeError("atom", atom.typ))
+	if atom.Typ != "atom" {
+		panic(getUnexpectedTypeError("atom", atom.Typ))
 	}
-	if len(atom.children) == 0 {
+	if len(atom.Children) == 0 {
 		panic("no atom child as unexpected")
-	} else if len(atom.children) != 1 {
+	} else if len(atom.Children) != 1 {
 		panic("too much atom children")
 	}
 	final := false
-	child := atom.children[0]
-	switch child.typ {
+	child := atom.Children[0]
+	switch child.Typ {
 	case "item":
 		s.item(child, variable)
 	case "name":
-		s.addRule(child.value, false)
+		s.addRule(child.Value, false)
 	case "chars":
-		s.addString(child.value, variable)
+		s.addString(child.Value, variable)
 	case "literal":
-		s.addLiteral(child.value)
+		s.addLiteral(child.Value)
 	case "body":
 		s.addSubRule(child)
 		s.addRule(s.name+"_"+strconv.Itoa(s.subRuleCount), true)
 		final = true
 	default:
-		panic(fmt.Sprintf("atom has illegal child: %s", child.typ))
+		panic(fmt.Sprintf("atom has illegal child: %s", child.Typ))
 	}
 	return final
 }
 
 func (s *RuleProg) loop(loop Node, various, pos_is_added bool) bool {
-	if loop.typ != "loop" {
-		panic(getUnexpectedTypeError("loop", loop.typ))
+	if loop.Typ != "loop" {
+		panic(getUnexpectedTypeError("loop", loop.Typ))
 	}
-	if len(loop.children) == 0 {
+	if len(loop.Children) == 0 {
 		panic("zero atom as unexpected")
-	} else if len(loop.children) != 1 {
+	} else if len(loop.Children) != 1 {
 		panic("too much loop")
 	}
 	add_pos := pos_is_added
-	switch loop.value {
+	switch loop.Value {
 	case "":
-		s.atom(loop.children[0], various)
+		s.atom(loop.Children[0], various)
 	case "?":
-		s.atom(loop.children[0], true)
+		s.atom(loop.Children[0], true)
 		s.close()
 		s.writeCloseCatcher()
 	case "*":
-		child := loop.children[0]
+		child := loop.Children[0]
 		s.writeMark(add_pos)
 		s.writeRuleFor()
 		s.atom(child, various)
@@ -280,7 +280,7 @@ func (s *RuleProg) loop(loop Node, various, pos_is_added bool) bool {
 		s.writeCloseCatcher()
 		add_pos = true
 	case "+":
-		child := loop.children[0]
+		child := loop.Children[0]
 		sub := s.atom(child, various)
 		s.writeMark(add_pos)
 		s.writeRuleFor()
@@ -300,18 +300,18 @@ func (s *RuleProg) loop(loop Node, various, pos_is_added bool) bool {
 	return add_pos
 }
 
-func (s *RuleProg) alt(alt Node, variable bool) {
-	if alt.typ != "alts" {
-		panic(getUnexpectedTypeError("alts", alt.typ))
+func (s *RuleProg) alternative(alt Node, variable bool) {
+	if alt.Typ != "alternative" {
+		panic(getUnexpectedTypeError("alternative", alt.Typ))
 	}
-	if len(alt.children) == 0 {
+	if len(alt.Children) == 0 {
 		panic("zero loop as unexpected")
 	}
 	add_pos := false
-	for _, loop := range alt.children {
+	for _, loop := range alt.Children {
 		add_pos = s.loop(loop, variable, add_pos)
 	}
-	for i := range alt.children {
+	for i := range alt.Children {
 		if i == 0 {
 			s.writeReturn()
 		} else {
@@ -321,21 +321,21 @@ func (s *RuleProg) alt(alt Node, variable bool) {
 }
 
 func (s *RuleProg) body(body Node) {
-	if body.typ != "body" {
-		panic(getUnexpectedTypeError("body", body.typ))
+	if body.Typ != "body" {
+		panic(getUnexpectedTypeError("body", body.Typ))
 	}
-	if len(body.children) == 0 {
+	if len(body.Children) == 0 {
 		panic("no body children as unexpected")
 	}
-	if len(body.children) > 1 {
+	if len(body.Children) > 1 {
 		variable := false
-		for _, alt := range body.children {
-			if len(alt.children) == 1 {
-				loop := alt.children[0]
-				atom := loop.children[0]
-				if atom.children[0].typ == "item" {
-					item := atom.children[0]
-					if item.children[0].typ == "chars" {
+		for _, alt := range body.Children {
+			if len(alt.Children) == 1 {
+				loop := alt.Children[0]
+				atom := loop.Children[0]
+				if atom.Children[0].Typ == "item" {
+					item := atom.Children[0]
+					if item.Children[0].Typ == "chars" {
 						variable = true
 						break
 					}
@@ -343,13 +343,13 @@ func (s *RuleProg) body(body Node) {
 			}
 		}
 		s.writeMark(false)
-		for _, alt := range body.children {
-			s.alt(alt, variable)
+		for _, alt := range body.Children {
+			s.alternative(alt, variable)
 			s.writeReset()
 		}
 	} else {
 		s.writeMark(false)
-		s.alt(body.children[0], false)
+		s.alternative(body.Children[0], false)
 		s.writeReset()
 	}
 }
@@ -362,8 +362,8 @@ type PegCompiler struct {
 }
 
 func GetPegCompiler(data Node, lang string) PegCompiler {
-	if data.typ != "grammar" {
-		panic(fmt.Sprintf("grammar is expected, got %s", data.typ))
+	if data.Typ != "grammar" {
+		panic(fmt.Sprintf("grammar is expected, got %s", data.Typ))
 	}
 	return PegCompiler{data, lang, []RuleProg{}, RuleProg{}}
 }
@@ -375,19 +375,19 @@ func newRule(lang, name string) RuleProg {
 }
 
 func (s *PegCompiler) rule(rule Node) {
-	if rule.typ != "rule" {
-		panic(getUnexpectedTypeError("rule", rule.typ))
+	if rule.Typ != "rule" {
+		panic(getUnexpectedTypeError("rule", rule.Typ))
 	}
-	if len(rule.children) == 0 {
+	if len(rule.Children) == 0 {
 		panic("no rule child as unexpected")
-	} else if len(rule.children) != 1 {
+	} else if len(rule.Children) != 1 {
 		panic("too much rule children")
 	}
-	if rule.value == "" {
+	if rule.Value == "" {
 		panic("unnamed rule")
 	}
-	r := newRule(s.lang, rule.value)
-	r.body(rule.children[0])
+	r := newRule(s.lang, rule.Value)
+	r.body(rule.Children[0])
 	r.writeReturnNull()
 	s.rules = append(s.rules, r)
 }
@@ -404,7 +404,7 @@ func (s *PegCompiler) Compile(path string) {
 		}
 	}
 	s.lang = langB.String()
-	for _, rule := range s.data.children {
+	for _, rule := range s.data.Children {
 		s.rule(rule)
 	}
 	finalProg := `package @2
@@ -436,7 +436,7 @@ func Get@1Parser(text string) @1 {
 		}
 		finalProg += rule.program + "\n\n"
 	}
-	finalProg += "func (s *" + s.lang + ") Parse() Node {\n\treturn s." + s.data.children[0].value + "()\n}"
+	finalProg += "func (s *" + s.lang + ") Parse() Node {\n\treturn s." + s.data.Children[0].Value + "()\n}"
 	os.Mkdir(path+name+"/", os.ModePerm)
 	os.Remove(fmt.Sprintf(path+"%s/%s.go", name, name))
 	os.WriteFile(fmt.Sprintf(path+"%s/%s.go", name, name), []byte(finalProg), fs.ModeAppend)

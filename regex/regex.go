@@ -283,6 +283,10 @@ func meta(r, meta rune) bool {
 		if r >= '0' && r <= '9' {
 			return true
 		}
+	case 'b':
+		if r != '[' && r != ']' {
+			return true
+		}
 	case 'r':
 		if r == '\r' {
 			return true
@@ -335,6 +339,14 @@ func test(stack []State, runes []rune, index, pos int) bool {
 				pos = next.ID
 				if test(stack, runes, index, pos) {
 					return true
+				}
+			} else {
+				if r == next.Value {
+					index += 1
+					pos = next.ID
+					if test(stack, runes, index, pos) {
+						return true
+					}
 				}
 			}
 		case "not_meta":
