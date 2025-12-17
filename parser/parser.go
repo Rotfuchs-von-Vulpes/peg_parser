@@ -195,11 +195,6 @@ func (s *Tokenizer) Name() (bool, string) {
 }
 
 func (s *Tokenizer) Regex(rule string) (bool, string) {
-	// speak := false
-	// if rule == "[(\\r|\\n| |\\t)*]" {
-	// 	fmt.Println("oi")
-	// 	speak = true
-	// }
 	buffer := strings.Builder{}
 	cuttoff := false
 	if regex.Run(rule, "") {
