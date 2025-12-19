@@ -25,12 +25,13 @@ func main() {
 			panic(err.Error())
 		}
 		pegP := peg.GetPegParser(string(file))
-		grammar := pegP.Parse()
-		c := peg.GetPegCompiler(grammar, getName(args[0]))
-		if len(args) == 2 {
-			c.Compile(args[1])
-		} else {
-			c.Compile("")
+		if grammar, ok := pegP.Parse().(peg.Grammar); ok {
+			c := peg.GetPegCompiler(grammar, getName(args[0]))
+			if len(args) == 2 {
+				c.Compile(args[1])
+			} else {
+				c.Compile("")
+			}
 		}
 	}
 }
