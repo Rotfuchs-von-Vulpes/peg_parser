@@ -135,12 +135,18 @@ func (s *Stack) mode(mode Node) StateIn {
 	if child.Typ != "atom" {
 		panic("mode has illegal child")
 	}
-	if len(mode.Children) == 2 && mode.Children[1].Value == "!" {
-		s.states[s.count].Next = append(s.states[s.count].Next, StateIn{s.count + 1, "not", 0})
+	// if len(mode.Children) == 2 && mode.Children[1].Value == "!" {
+	// 	s.states[s.count].Next = append(s.states[s.count].Next, StateIn{s.count + 1, "not", 0})
+	// 	s.count += 1
+	// 	s.states = append(s.states, State{s.count, []StateIn{}})
+	// }
+	mark := s.count
+	add_not := len(mode.Children) == 2 && mode.Children[1].Value == "!"
+	if add_not {
+		s.states[s.count].Next = append(s.states[mark].Next, StateIn{s.count + 1, "not", 0})
 		s.count += 1
 		s.states = append(s.states, State{s.count, []StateIn{}})
 	}
-	mark := s.count
 	nextPass := s.atom(child)
 	if len(mode.Children) == 2 {
 		repeat := mode.Children[1]
@@ -151,6 +157,8 @@ func (s *Stack) mode(mode Node) StateIn {
 		case "?":
 			s.states[mark].Next = append(s.states[mark].Next, StateIn{s.count + 1, "", 0})
 		case "!":
+			s.count += 1
+			s.states = append(s.states, State{s.count, []StateIn{{1, "end", 0}}})
 			s.states[mark].Next = append(s.states[mark].Next, StateIn{s.count + 1, "", 0})
 		case "*":
 			if s.count-mark == 0 {
@@ -265,6 +273,7 @@ func GetRegexStack(regex Node) []State {
 	}
 	final := Stack{[]State{{0, []StateIn{}}}, 0, false}
 	final.assemle(regex)
+	final.states[len(final.states)-1].Next = []StateIn{{0, "end", 0}}
 	return final.states
 }
 
@@ -302,17 +311,14 @@ func meta(r, meta rune) bool {
 	return false
 }
 
-func test(stack []State, runes []rune, index, pos int) bool {
+func test(stack []State, runes []rune, index, pos int, flag bool) bool {
 	// fmt.Println("pos: " + strconv.Itoa(pos))
 	s := stack[pos]
 	if index > len(runes)-1 {
-		return len(s.Next) == 0
+		return false
 	}
 	r := runes[index]
 	// fmt.Println("rune: " + string(r))
-	if len(s.Next) == 0 {
-		return r == 0
-	}
 	nullNextList := []int{}
 	for _, next := range s.Next {
 		switch next.Typ {
@@ -320,7 +326,7 @@ func test(stack []State, runes []rune, index, pos int) bool {
 			if r == next.Value {
 				index += 1
 				pos = next.ID
-				if test(stack, runes, index, pos) {
+				if test(stack, runes, index, pos, flag) {
 					return true
 				}
 			}
@@ -328,7 +334,7 @@ func test(stack []State, runes []rune, index, pos int) bool {
 			if r != next.Value {
 				index += 1
 				pos = next.ID
-				if test(stack, runes, index, pos) {
+				if test(stack, runes, index, pos, flag) {
 					return true
 				}
 			}
@@ -336,14 +342,14 @@ func test(stack []State, runes []rune, index, pos int) bool {
 			if meta(r, next.Value) {
 				index += 1
 				pos = next.ID
-				if test(stack, runes, index, pos) {
+				if test(stack, runes, index, pos, flag) {
 					return true
 				}
 			} else {
 				if r == next.Value {
 					index += 1
 					pos = next.ID
-					if test(stack, runes, index, pos) {
+					if test(stack, runes, index, pos, flag) {
 						return true
 					}
 				}
@@ -352,15 +358,28 @@ func test(stack []State, runes []rune, index, pos int) bool {
 			if !meta(r, next.Value) {
 				index += 1
 				pos = next.ID
-				if test(stack, runes, index, pos) {
+				if test(stack, runes, index, pos, flag) {
 					return true
 				}
 			}
 		case "not":
-			if test(stack, runes, index, next.ID) {
+			if test(stack, runes, index, next.ID, true) {
 				return false
-			} else {
+			}
+			index += 1
+			if index > len(runes)-1 {
+				return false
+			}
+			r = runes[index]
+		case "end":
+			if flag {
 				return true
+			} else {
+				if pos == len(stack)-1 && index == len(runes)-1 {
+					return true
+				} else {
+					return false
+				}
 			}
 		case "":
 			nullNextList = append(nullNextList, next.ID)
@@ -371,7 +390,7 @@ func test(stack []State, runes []rune, index, pos int) bool {
 	if len(nullNextList) != 0 {
 		slices.Sort(nullNextList)
 		for _, next := range nullNextList {
-			if test(stack, runes, index, next) {
+			if test(stack, runes, index, next, flag) {
 				return true
 			}
 		}
@@ -382,7 +401,7 @@ func test(stack []State, runes []rune, index, pos int) bool {
 func UseStack(stack []State, str string) bool {
 	runes := []rune(str)
 	runes = append(runes, 0)
-	return test(stack, runes, 0, 0)
+	return test(stack, runes, 0, 0, false)
 }
 
 var memo map[string]*[]State
