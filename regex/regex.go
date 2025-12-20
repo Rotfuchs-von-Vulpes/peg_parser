@@ -231,7 +231,7 @@ func (s *Stack) capture(capture Node) StateIn {
 	}
 }
 
-func (s *Stack) assemle(regex Node) {
+func (s *Stack) assemble(regex Node) {
 	if regex.Typ != "regex" {
 		panic(getUnexpectedTypeError("regex", regex.Typ))
 	}
@@ -257,7 +257,7 @@ func GetRegexStack(regex Node) []State {
 		panic("Too much regex children")
 	}
 	final := Stack{[]State{{0, []StateIn{}}}, 0, false}
-	final.assemle(regex)
+	final.assemble(regex)
 	final.states[len(final.states)-1].Next = []StateIn{{0, "end", 0}}
 	return final.states
 }
