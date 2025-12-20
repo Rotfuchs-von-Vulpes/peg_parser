@@ -137,28 +137,8 @@ func (s *RuleProg) addLiteral(literal string) {
 	switch literal {
 	case "ENDMARKER":
 		s.writeIf("if ok := s.parser.Expect(0); ok")
-	case "NEWLINE":
-		s.writeIf("if ok := s.parser.String(\"\\r\\n\"); ok")
-	case "RUNE":
-		s.writeIf("if ok, r := s.parser.Rune(); ok")
-		s.write("@3nodes = append(nodes, Node{\"rune\", string(r), []Node{}})@1")
-	case "NUMBER":
-		s.writeIf("if ok, number := s.parser.Number(); ok")
-		s.write("@3nodes = append(nodes, Node{\"number\", number, []Node{}})@1")
-	case "HIGH_LETTER":
-		s.writeIf("if ok, r := s.parser.HighLetter(); ok")
-		s.write("@3nodes = append(nodes, Node{\"rune\", string(r), []Node{}})@1")
-	case "LOW_LETTER":
-		s.writeIf("if ok, r := s.parser.LowLetter(); ok")
-		s.write("@3nodes = append(nodes, Node{\"rune\", string(r), []Node{}})@1")
-	case "LETTER":
-		s.writeIf("if ok, r := s.parser.Letter(); ok")
-		s.write("@3nodes = append(nodes, Node{\"rune\", string(r), []Node{}})@1")
-	case "NAME":
-		s.writeIf("if ok, name := s.parser.Name(); ok")
-		s.write("@3nodes = append(nodes, Node{\"name\", name, []Node{}})@1")
 	default:
-		panic(fmt.Sprintf("unknow literal: %s", literal))
+		panic("unknow literal: " + literal)
 	}
 }
 
