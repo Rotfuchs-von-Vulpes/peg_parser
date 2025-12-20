@@ -16,14 +16,10 @@ func GetRegexParser(text string) Regex {
 
 func (s *Regex) regex() Node {
 	nodes := []Node{}
-	if ok := s.parser.String("["); ok {
-		if capture := s.capture(); capture.Typ != "" {
-			nodes = append(nodes, capture)
-			if ok := s.parser.String("]"); ok {
-				if ok := s.parser.Expect(0); ok {
-					return Node{"regex", "", nodes}
-				}
-			}
+	if capture := s.capture(); capture.Typ != "" {
+		nodes = append(nodes, capture)
+		if ok := s.parser.Expect(0); ok {
+			return Node{"regex", "", nodes}
 		}
 	}
 	return Node{}
@@ -122,10 +118,6 @@ func (s *Regex) atom() Node {
 	pos := s.parser.Mark()
 	if char := s.char(); char.Typ != "" {
 		nodes = append(nodes, char)
-		if ok := s.parser.String("!"); ok {
-			nodes = append(nodes, Node{"string", "!", []Node{}})
-			return Node{"atom", "", nodes}
-		}
 		return Node{"atom", "", nodes}
 	}
 	s.parser.Reset(pos)

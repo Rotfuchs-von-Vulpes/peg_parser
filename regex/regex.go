@@ -26,7 +26,7 @@ func getUnexpectedTypeError(want string, get string) string {
 	return fmt.Sprintf("This is what you want: %s, this is what you get: %s", want, get)
 }
 
-func (s *Stack) run(run Node, not bool) StateIn {
+func (s *Stack) run(run Node) StateIn {
 	if run.Typ != "rune" {
 		panic(getUnexpectedTypeError("rune", run.Typ))
 	}
@@ -37,13 +37,7 @@ func (s *Stack) run(run Node, not bool) StateIn {
 		panic("Empty rune value")
 	}
 	literal := []rune(run.Value)[0]
-	var mode string
-	if not {
-		mode = "not_rune"
-	} else {
-		mode = "rune"
-	}
-	nextPass := StateIn{s.count + 1, mode, literal}
+	nextPass := StateIn{s.count + 1, "rune", literal}
 	if !s.dontAdd {
 		s.states[s.count].Next = append(s.states[s.count].Next, nextPass)
 	}
@@ -51,7 +45,7 @@ func (s *Stack) run(run Node, not bool) StateIn {
 	return nextPass
 }
 
-func (s *Stack) meta(meta Node, not bool) StateIn {
+func (s *Stack) meta(meta Node) StateIn {
 	if meta.Typ != "meta" {
 		panic(getUnexpectedTypeError("meta", meta.Typ))
 	}
@@ -62,13 +56,7 @@ func (s *Stack) meta(meta Node, not bool) StateIn {
 		panic("Empty meta value")
 	}
 	literal := []rune(meta.Value)[0]
-	var mode string
-	if not {
-		mode = "not_meta"
-	} else {
-		mode = "meta"
-	}
-	nextPass := StateIn{s.count + 1, mode, literal}
+	nextPass := StateIn{s.count + 1, "meta", literal}
 	if !s.dontAdd {
 		s.states[s.count].Next = append(s.states[s.count].Next, nextPass)
 	}
@@ -76,7 +64,7 @@ func (s *Stack) meta(meta Node, not bool) StateIn {
 	return nextPass
 }
 
-func (s *Stack) char(char Node, not bool) StateIn {
+func (s *Stack) char(char Node) StateIn {
 	if char.Typ != "char" {
 		panic(getUnexpectedTypeError("char", char.Typ))
 	}
@@ -89,9 +77,9 @@ func (s *Stack) char(char Node, not bool) StateIn {
 	child := char.Children[0]
 	switch child.Typ {
 	case "meta":
-		return s.meta(child, not)
+		return s.meta(child)
 	case "rune":
-		return s.run(child, not)
+		return s.run(child)
 	default:
 		panic("char has illegal child")
 	}
@@ -110,10 +98,7 @@ func (s *Stack) atom(atom Node) StateIn {
 	child := atom.Children[0]
 	switch child.Typ {
 	case "char":
-		if len(atom.Children) == 2 {
-			return s.char(child, true)
-		}
-		return s.char(child, false)
+		return s.char(child)
 	case "capture":
 		return s.capture(child)
 	default:
@@ -330,14 +315,6 @@ func test(stack []State, runes []rune, index, pos int, flag bool) bool {
 					return true
 				}
 			}
-		case "not_rune":
-			if r != next.Value {
-				index += 1
-				pos = next.ID
-				if test(stack, runes, index, pos, flag) {
-					return true
-				}
-			}
 		case "meta":
 			if meta(r, next.Value) {
 				index += 1
@@ -352,14 +329,6 @@ func test(stack []State, runes []rune, index, pos int, flag bool) bool {
 					if test(stack, runes, index, pos, flag) {
 						return true
 					}
-				}
-			}
-		case "not_meta":
-			if !meta(r, next.Value) {
-				index += 1
-				pos = next.ID
-				if test(stack, runes, index, pos, flag) {
-					return true
 				}
 			}
 		case "not":
