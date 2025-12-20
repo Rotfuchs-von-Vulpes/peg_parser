@@ -366,11 +366,6 @@ func test(stack []State, runes []rune, index, pos int, flag bool) bool {
 			if test(stack, runes, index, next.ID, true) {
 				return false
 			}
-			index += 1
-			if index > len(runes)-1 {
-				return false
-			}
-			r = runes[index]
 		case "end":
 			if flag {
 				return true
