@@ -12,8 +12,8 @@ type StateIn struct {
 }
 
 type State struct {
-	ID   int
-	Next []StateIn
+	id   int
+	next []StateIn
 }
 
 type Stack struct {
@@ -39,7 +39,7 @@ func (s *Stack) run(run Node) StateIn {
 	literal := []rune(run.Value)[0]
 	nextPass := StateIn{s.count + 1, "rune", literal}
 	if !s.dontAdd {
-		s.states[s.count].Next = append(s.states[s.count].Next, nextPass)
+		s.states[s.count].next = append(s.states[s.count].next, nextPass)
 	}
 	s.dontAdd = false
 	return nextPass
@@ -58,7 +58,7 @@ func (s *Stack) meta(meta Node) StateIn {
 	literal := []rune(meta.Value)[0]
 	nextPass := StateIn{s.count + 1, "meta", literal}
 	if !s.dontAdd {
-		s.states[s.count].Next = append(s.states[s.count].Next, nextPass)
+		s.states[s.count].next = append(s.states[s.count].next, nextPass)
 	}
 	s.dontAdd = false
 	return nextPass
@@ -120,15 +120,10 @@ func (s *Stack) mode(mode Node) StateIn {
 	if child.Typ != "atom" {
 		panic("mode has illegal child")
 	}
-	// if len(mode.Children) == 2 && mode.Children[1].Value == "!" {
-	// 	s.states[s.count].Next = append(s.states[s.count].Next, StateIn{s.count + 1, "not", 0})
-	// 	s.count += 1
-	// 	s.states = append(s.states, State{s.count, []StateIn{}})
-	// }
 	mark := s.count
 	add_not := len(mode.Children) == 2 && mode.Children[1].Value == "!"
 	if add_not {
-		s.states[s.count].Next = append(s.states[mark].Next, StateIn{s.count + 1, "not", 0})
+		s.states[s.count].next = append(s.states[mark].next, StateIn{s.count + 1, "not", 0})
 		s.count += 1
 		s.states = append(s.states, State{s.count, []StateIn{}})
 	}
@@ -140,25 +135,25 @@ func (s *Stack) mode(mode Node) StateIn {
 		}
 		switch repeat.Value {
 		case "?":
-			s.states[mark].Next = append(s.states[mark].Next, StateIn{s.count + 1, "", 0})
+			s.states[mark].next = append(s.states[mark].next, StateIn{s.count + 1, "jump", 0})
 		case "!":
 			s.count += 1
 			s.states = append(s.states, State{s.count, []StateIn{{1, "end", 0}}})
-			s.states[mark].Next = append(s.states[mark].Next, StateIn{s.count + 1, "", 0})
+			s.states[mark].next = append(s.states[mark].next, StateIn{s.count + 1, "jump", 0})
 		case "*":
 			if s.count-mark == 0 {
 				s.count += 1
 				s.states = append(s.states, State{s.count, []StateIn{}})
-				s.states[s.count].Next = append(s.states[s.count].Next, StateIn{mark, "", 0})
-				s.states[mark].Next = append(s.states[mark].Next, StateIn{s.count + 1, "", 0})
+				s.states[s.count].next = append(s.states[s.count].next, StateIn{mark, "jump", 0})
+				s.states[mark].next = append(s.states[mark].next, StateIn{s.count + 1, "jump", 0})
 			} else {
-				s.states[s.count].Next = append(s.states[s.count].Next, StateIn{mark, "", 0})
-				s.states[mark].Next = append(s.states[mark].Next, StateIn{s.count + 1, "", 0})
+				s.states[s.count].next = append(s.states[s.count].next, StateIn{mark, "jump", 0})
+				s.states[mark].next = append(s.states[mark].next, StateIn{s.count + 1, "jump", 0})
 			}
 		case "+":
 			s.count += 1
 			s.states = append(s.states, State{s.count, []StateIn{}})
-			s.states[s.count].Next = append(s.states[s.count].Next, StateIn{mark, "", 0}, StateIn{s.count + 1, "", 0})
+			s.states[s.count].next = append(s.states[s.count].next, StateIn{mark, "jump", 0}, StateIn{s.count + 1, "jump", 0})
 		default:
 			panic("Illegal mode literal")
 		}
@@ -216,16 +211,16 @@ func (s *Stack) capture(capture Node) StateIn {
 				first = false
 			}
 		}
-		s.states[mark].Next = []StateIn{}
+		s.states[mark].next = []StateIn{}
 		for i, next := range nextList {
 			init := initList[i]
 			end := endList[i]
 			if end-init == -1 {
-				s.states[mark].Next = append(s.states[mark].Next, StateIn{s.count + 1, next.Typ, next.Value})
+				s.states[mark].next = append(s.states[mark].next, StateIn{s.count + 1, next.Typ, next.Value})
 			} else {
-				s.states[mark].Next = append(s.states[mark].Next, StateIn{init, next.Typ, next.Value})
+				s.states[mark].next = append(s.states[mark].next, StateIn{init, next.Typ, next.Value})
 			}
-			s.states[end].Next[0].ID = s.count + 1
+			s.states[end].next[0].ID = s.count + 1
 		}
 		return firstNext
 	}
@@ -258,7 +253,7 @@ func GetRegexStack(regex Node) []State {
 	}
 	final := Stack{[]State{{0, []StateIn{}}}, 0, false}
 	final.assemble(regex)
-	final.states[len(final.states)-1].Next = []StateIn{{0, "end", 0}}
+	final.states[len(final.states)-1].next = []StateIn{{0, "end", 0}}
 	return final.states
 }
 
@@ -296,47 +291,32 @@ func meta(r, meta rune) bool {
 	return false
 }
 
-func test(stack []State, runes []rune, index, pos int, flag bool) bool {
-	// fmt.Println("pos: " + strconv.Itoa(pos))
+func test(stack []State, runes []rune, index, pos int, inside_not bool, fromFront bool) bool {
 	s := stack[pos]
 	if index > len(runes)-1 {
 		return false
 	}
 	r := runes[index]
-	// fmt.Println("rune: " + string(r))
+	fmt.Println("rune: " + string(r))
 	nullNextList := []int{}
-	for _, next := range s.Next {
+	for _, next := range s.next {
 		switch next.Typ {
 		case "rune":
-			if r == next.Value {
-				index += 1
-				pos = next.ID
-				if test(stack, runes, index, pos, flag) {
-					return true
-				}
+			if r == next.Value && test(stack, runes, index+1, next.ID, inside_not, false) {
+				return true
 			}
 		case "meta":
-			if meta(r, next.Value) {
-				index += 1
-				pos = next.ID
-				if test(stack, runes, index, pos, flag) {
-					return true
-				}
-			} else {
-				if r == next.Value {
-					index += 1
-					pos = next.ID
-					if test(stack, runes, index, pos, flag) {
-						return true
-					}
-				}
+			if meta(r, next.Value) && test(stack, runes, index+1, next.ID, inside_not, false) {
+				return true
+			} else if r == next.Value && test(stack, runes, index+1, next.ID, inside_not, false) {
+				return true
 			}
 		case "not":
-			if test(stack, runes, index, next.ID, true) {
+			if test(stack, runes, index, next.ID, true, fromFront) {
 				return false
 			}
 		case "end":
-			if flag {
+			if inside_not {
 				return true
 			} else {
 				if pos == len(stack)-1 && index == len(runes)-1 {
@@ -345,7 +325,7 @@ func test(stack []State, runes []rune, index, pos int, flag bool) bool {
 					return false
 				}
 			}
-		case "":
+		case "jump":
 			nullNextList = append(nullNextList, next.ID)
 		default:
 			panic(next.Typ + " não foi implementado")
@@ -354,7 +334,10 @@ func test(stack []State, runes []rune, index, pos int, flag bool) bool {
 	if len(nullNextList) != 0 {
 		slices.Sort(nullNextList)
 		for _, next := range nullNextList {
-			if test(stack, runes, index, next, flag) {
+			if next < pos && fromFront {
+				continue
+			}
+			if test(stack, runes, index, next, inside_not, fromFront || next < pos) {
 				return true
 			}
 		}
@@ -365,7 +348,7 @@ func test(stack []State, runes []rune, index, pos int, flag bool) bool {
 func UseStack(stack []State, str string) bool {
 	runes := []rune(str)
 	runes = append(runes, 0)
-	return test(stack, runes, 0, 0, false)
+	return test(stack, runes, 0, 0, false, false)
 }
 
 var memo map[string]*[]State
