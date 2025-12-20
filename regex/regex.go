@@ -265,7 +265,6 @@ func GetRegexStack(regex Node) []State {
 	}
 	final := Stack{[]State{{0, []StateIn{}}}, 0, false}
 	final.assemle(regex)
-	//fmt.Println(final.states)
 	return final.states
 }
 
