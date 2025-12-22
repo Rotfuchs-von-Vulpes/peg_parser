@@ -131,15 +131,10 @@ func (s *Stack) mode(mode Node) {
 			s.states = append(s.states, State{s.count, []StateIn{{1, "end", 0}}})
 			s.states[mark].next = append(s.states[mark].next, StateIn{s.count + 1, "jump", 0})
 		case "*":
-			if s.count-mark == 0 {
-				s.count += 1
-				s.states = append(s.states, State{s.count, []StateIn{}})
-				s.states[s.count].next = append(s.states[s.count].next, StateIn{mark, "jump", 0})
-				s.states[mark].next = append(s.states[mark].next, StateIn{s.count + 1, "jump", 0})
-			} else {
-				s.states[s.count].next = append(s.states[s.count].next, StateIn{mark, "jump", 0})
-				s.states[mark].next = append(s.states[mark].next, StateIn{s.count + 1, "jump", 0})
-			}
+			s.count += 1
+			s.states = append(s.states, State{s.count, []StateIn{}})
+			s.states[s.count].next = append(s.states[s.count].next, StateIn{mark, "jump", 0})
+			s.states[mark].next = append(s.states[mark].next, StateIn{s.count + 1, "jump", 0})
 		case "+":
 			s.count += 1
 			s.states = append(s.states, State{s.count, []StateIn{}})
