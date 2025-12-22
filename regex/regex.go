@@ -26,7 +26,7 @@ func getUnexpectedTypeError(want string, get string) string {
 	return fmt.Sprintf("This is what you want: %s, this is what you get: %s", want, get)
 }
 
-func (s *Stack) run(run Node) StateIn {
+func (s *Stack) run(run Node) {
 	if run.Typ != "rune" {
 		panic(getUnexpectedTypeError("rune", run.Typ))
 	}
@@ -37,15 +37,10 @@ func (s *Stack) run(run Node) StateIn {
 		panic("Empty rune value")
 	}
 	literal := []rune(run.Value)[0]
-	nextPass := StateIn{s.count + 1, "rune", literal}
-	if !s.dontAdd {
-		s.states[s.count].next = append(s.states[s.count].next, nextPass)
-	}
-	s.dontAdd = false
-	return nextPass
+	s.states[s.count].next = append(s.states[s.count].next, StateIn{s.count + 1, "rune", literal})
 }
 
-func (s *Stack) meta(meta Node) StateIn {
+func (s *Stack) meta(meta Node) {
 	if meta.Typ != "meta" {
 		panic(getUnexpectedTypeError("meta", meta.Typ))
 	}
@@ -56,15 +51,10 @@ func (s *Stack) meta(meta Node) StateIn {
 		panic("Empty meta value")
 	}
 	literal := []rune(meta.Value)[0]
-	nextPass := StateIn{s.count + 1, "meta", literal}
-	if !s.dontAdd {
-		s.states[s.count].next = append(s.states[s.count].next, nextPass)
-	}
-	s.dontAdd = false
-	return nextPass
+	s.states[s.count].next = append(s.states[s.count].next, StateIn{s.count + 1, "meta", literal})
 }
 
-func (s *Stack) char(char Node) StateIn {
+func (s *Stack) char(char Node) {
 	if char.Typ != "char" {
 		panic(getUnexpectedTypeError("char", char.Typ))
 	}
@@ -77,15 +67,15 @@ func (s *Stack) char(char Node) StateIn {
 	child := char.Children[0]
 	switch child.Typ {
 	case "meta":
-		return s.meta(child)
+		s.meta(child)
 	case "rune":
-		return s.run(child)
+		s.run(child)
 	default:
 		panic("char has illegal child")
 	}
 }
 
-func (s *Stack) atom(atom Node) StateIn {
+func (s *Stack) atom(atom Node) {
 	if atom.Typ != "atom" {
 		panic(getUnexpectedTypeError("atom", atom.Typ))
 	}
@@ -98,15 +88,15 @@ func (s *Stack) atom(atom Node) StateIn {
 	child := atom.Children[0]
 	switch child.Typ {
 	case "char":
-		return s.char(child)
+		s.char(child)
 	case "capture":
-		return s.capture(child)
+		s.capture(child)
 	default:
 		panic("char has illegal child")
 	}
 }
 
-func (s *Stack) mode(mode Node) StateIn {
+func (s *Stack) mode(mode Node) {
 	if mode.Typ != "mode" {
 		panic(getUnexpectedTypeError("mode", mode.Typ))
 	}
@@ -127,7 +117,7 @@ func (s *Stack) mode(mode Node) StateIn {
 		s.count += 1
 		s.states = append(s.states, State{s.count, []StateIn{}})
 	}
-	nextPass := s.atom(child)
+	s.atom(child)
 	if len(mode.Children) == 2 {
 		repeat := mode.Children[1]
 		if repeat.Typ != "string" {
@@ -158,34 +148,25 @@ func (s *Stack) mode(mode Node) StateIn {
 			panic("Illegal mode literal")
 		}
 	}
-	return nextPass
 }
 
-func (s *Stack) group(group Node) StateIn {
+func (s *Stack) group(group Node) {
 	if group.Typ != "group" {
 		panic(getUnexpectedTypeError("group", group.Typ))
 	}
 	if len(group.Children) == 0 {
 		panic("No group children was unexpected")
 	}
-	first := true
-	var nextPass StateIn
 	for i, mode := range group.Children {
-		if first {
-			nextPass = s.mode(mode)
-			first = false
-		} else {
-			s.mode(mode)
-		}
+		s.mode(mode)
 		if i < len(group.Children)-1 {
 			s.count += 1
 			s.states = append(s.states, State{s.count, []StateIn{}})
 		}
 	}
-	return nextPass
 }
 
-func (s *Stack) capture(capture Node) StateIn {
+func (s *Stack) capture(capture Node) {
 	if capture.Typ != "capture" {
 		panic(getUnexpectedTypeError("capture", capture.Typ))
 	}
@@ -193,36 +174,28 @@ func (s *Stack) capture(capture Node) StateIn {
 		panic("No capture children was unexpected")
 	}
 	if len(capture.Children) == 1 {
-		return s.group(capture.Children[0])
+		s.group(capture.Children[0])
 	} else {
 		mark := s.count
-		nextList := []StateIn{}
+		s.count += 1
+		s.states = append(s.states, State{s.count, []StateIn{}})
 		initList := []int{}
-		endList := []int{}
-		first := true
-		var firstNext StateIn
+		endlist := []int{}
 		for _, group := range capture.Children {
-			s.dontAdd = true
-			initList = append(initList, s.count+1)
-			nextList = append(nextList, s.group(group))
-			endList = append(endList, s.count)
-			if first {
-				firstNext = nextList[len(nextList)-1]
-				first = false
-			}
+			initList = append(initList, s.count)
+			s.group(group)
+			endlist = append(endlist, s.count)
+			s.count += 1
+			s.states = append(s.states, State{s.count, []StateIn{}})
 		}
-		s.states[mark].next = []StateIn{}
-		for i, next := range nextList {
+		for i := range capture.Children {
 			init := initList[i]
-			end := endList[i]
-			if end-init == -1 {
-				s.states[mark].next = append(s.states[mark].next, StateIn{s.count + 1, next.Typ, next.Value})
-			} else {
-				s.states[mark].next = append(s.states[mark].next, StateIn{init, next.Typ, next.Value})
-			}
-			s.states[end].next[0].ID = s.count + 1
+			s.states[mark].next = append(s.states[mark].next, StateIn{init, "jump", 0})
+			end := endlist[i]
+			s.states[end].next[0].ID = s.count
 		}
-		return firstNext
+		s.states = s.states[0 : len(s.states)-1]
+		s.count -= 1
 	}
 }
 
@@ -238,7 +211,7 @@ func (s *Stack) assemble(regex Node) {
 	}
 	s.capture(regex.Children[0])
 	s.count += 1
-	s.states = append(s.states, State{s.count, []StateIn{}})
+	s.states = append(s.states, State{s.count, []StateIn{{0, "end", 0}}})
 }
 
 func GetRegexStack(regex Node) []State {
@@ -253,7 +226,6 @@ func GetRegexStack(regex Node) []State {
 	}
 	final := Stack{[]State{{0, []StateIn{}}}, 0, false}
 	final.assemble(regex)
-	final.states[len(final.states)-1].next = []StateIn{{0, "end", 0}}
 	return final.states
 }
 
@@ -269,10 +241,6 @@ func meta(r, meta rune) bool {
 		}
 	case 'a':
 		if r >= '0' && r <= '9' {
-			return true
-		}
-	case 'b':
-		if r != '[' && r != ']' {
 			return true
 		}
 	case 'r':
@@ -297,7 +265,6 @@ func test(stack []State, runes []rune, index, pos int, inside_not bool, fromFron
 		return false
 	}
 	r := runes[index]
-	fmt.Println("rune: " + string(r))
 	nullNextList := []int{}
 	for _, next := range s.next {
 		switch next.Typ {
@@ -358,7 +325,11 @@ func Run(regex, str string) bool {
 	var ok bool
 	if s, ok = memo[regex]; !ok {
 		r := GetRegexParser(regex)
-		ss := GetRegexStack(r.Parse())
+		n := r.Parse()
+		if n.Typ == "" {
+			panic("failed to parse " + regex + " regex")
+		}
+		ss := GetRegexStack(n)
 		s = &ss
 	}
 	return UseStack(*s, str)

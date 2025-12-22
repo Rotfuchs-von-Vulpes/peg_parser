@@ -95,7 +95,7 @@ func (s *Peg) rule() Node {
 				if s.__() {
 					if body := s.body(); body != nil {
 						if s.__() {
-							if ok, _ := s.parser.Regex("[\\r\\n]"); ok {
+							if ok, _ := s.parser.Regex("\\r\\n"); ok {
 								return Rule{name, body.(Body)}
 							}
 						}
@@ -234,7 +234,7 @@ func (s *Peg) item() Node {
 }
 
 func (s *Peg) name() (bool, string) {
-	if ok, str := s.parser.Regex("[(\\w|\\a|_)+]"); ok {
+	if ok, str := s.parser.Regex("(\\w|\\a|_)+"); ok {
 		return true, str
 	}
 	return false, ""
@@ -243,7 +243,7 @@ func (s *Peg) name() (bool, string) {
 func (s *Peg) chars() (bool, string) {
 	pos := s.parser.Mark()
 	if ok := s.parser.String("'"); ok {
-		if ok, str := s.parser.Regex("['!+]"); ok {
+		if ok, str := s.parser.Regex("((')!.)+"); ok {
 			if ok := s.parser.String("'"); ok {
 				return true, str
 			}
@@ -251,7 +251,7 @@ func (s *Peg) chars() (bool, string) {
 	}
 	s.parser.Reset(pos)
 	if ok := s.parser.String("\""); ok {
-		if ok, str := s.parser.Regex("[\"!+]"); ok {
+		if ok, str := s.parser.Regex("((\")!.)+"); ok {
 			if ok := s.parser.String("\""); ok {
 				return true, str
 			}
@@ -263,9 +263,9 @@ func (s *Peg) chars() (bool, string) {
 
 func (s *Peg) regex() (bool, string) {
 	if ok := s.parser.String("["); ok {
-		if ok, str := s.parser.Regex("[\\b+]"); ok {
+		if ok, str := s.parser.Regex("(((\\\\)!.([|]))!.)+"); ok {
 			if ok := s.parser.String("]"); ok {
-				return true, "[" + str + "]"
+				return true, str
 			}
 		}
 	}
@@ -273,7 +273,7 @@ func (s *Peg) regex() (bool, string) {
 }
 
 func (s *Peg) __() bool {
-	if ok, _ := s.parser.Regex("[( |\\t)*]"); ok {
+	if ok, _ := s.parser.Regex("( |\\t)*"); ok {
 		return true
 	}
 	return false

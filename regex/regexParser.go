@@ -153,7 +153,7 @@ func (s *Regex) char() Node {
 	}
 	s.parser.Reset(pos)
 	if ok, r := s.parser.Rune(); ok {
-		if r == '(' || r == ')' || r == '[' || r == ']' || r == '+' || r == '*' || r == '?' || r == '!' || r == '|' {
+		if r == '(' || r == ')' || r == '+' || r == '*' || r == '?' || r == '!' || r == '|' {
 			return Node{}
 		}
 		nodes = append(nodes, Node{"rune", string(r), []Node{}})
