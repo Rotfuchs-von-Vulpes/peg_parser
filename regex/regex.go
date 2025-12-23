@@ -320,7 +320,6 @@ func Run(regex, str string) bool {
 	if s, ok := memo[regex]; ok {
 		return UseStack(s, str)
 	}
-	fmt.Println(regex)
 	r := GetRegexParser(regex)
 	n := r.Parse()
 	if n.Typ == "" {
