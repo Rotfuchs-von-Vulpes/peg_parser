@@ -65,14 +65,14 @@ func GetPegParser(text string) Peg {
 	return Peg{parser.GetTokenizer(text)}
 }
 
-func (s *Peg) grammar() Node {
+func (s *Peg) grammar() (bool, Grammar) {
 	nodes := []Rule{}
-	if rule := s.rule(); rule != nil {
-		nodes = append(nodes, rule.(Rule))
+	if ok, rule := s.rule(); ok {
+		nodes = append(nodes, rule)
 		pos := s.parser.Mark()
 		for {
-			if rule := s.rule(); rule != nil {
-				nodes = append(nodes, rule.(Rule))
+			if ok, rule := s.rule(); ok {
+				nodes = append(nodes, rule)
 				pos = s.parser.Mark()
 			} else {
 				break
@@ -81,22 +81,22 @@ func (s *Peg) grammar() Node {
 		s.parser.Reset(pos)
 		if s.__() {
 			if ok := s.parser.Expect(0); ok {
-				return Grammar{nodes}
+				return true, Grammar{nodes}
 			}
 		}
 	}
-	return nil
+	return false, Grammar{}
 }
 
-func (s *Peg) rule() Node {
+func (s *Peg) rule() (bool, Rule) {
 	if ok, name := s.name(); ok {
 		if s.__() {
 			if ok := s.parser.String(":"); ok {
 				if s.__() {
-					if body := s.body(); body != nil {
+					if ok, body := s.body(); ok {
 						if s.__() {
 							if ok, _ := s.parser.Regex("\\r\\n"); ok {
-								return Rule{name, body.(Body)}
+								return true, Rule{name, body}
 							}
 						}
 					}
@@ -104,67 +104,67 @@ func (s *Peg) rule() Node {
 			}
 		}
 	}
-	return nil
+	return false, Rule{}
 }
 
-func (s *Peg) body_1() Node {
+func (s *Peg) body_1() (bool, Alternative) {
 	if s.__() {
 		if ok := s.parser.String("|"); ok {
 			if s.__() {
-				if alternative := s.alternative(); alternative != nil {
-					return alternative
+				if ok, alternative := s.alternative(); ok {
+					return true, alternative
 				}
 			}
 		}
 	}
-	return nil
+	return false, Alternative{}
 }
 
-func (s *Peg) body() Node {
+func (s *Peg) body() (bool, Body) {
 	nodes := []Alternative{}
-	if alternative := s.alternative(); alternative != nil {
-		nodes = append(nodes, alternative.(Alternative))
+	if ok, alternative := s.alternative(); ok {
+		nodes = append(nodes, alternative)
 		pos := s.parser.Mark()
 		for {
-			if body_1 := s.body_1(); body_1 != nil {
-				nodes = append(nodes, body_1.(Alternative))
+			if ok, body_1 := s.body_1(); ok {
+				nodes = append(nodes, body_1)
 				pos = s.parser.Mark()
 			} else {
 				break
 			}
 		}
 		s.parser.Reset(pos)
-		return Body{nodes}
+		return true, Body{nodes}
 	}
-	return nil
+	return false, Body{}
 }
 
-func (s *Peg) alternative_1() Node {
+func (s *Peg) alternative_1() (bool, Loop) {
 	if s.__() {
-		if loop := s.loop(); loop != nil {
-			return loop
+		if ok, loop := s.loop(); ok {
+			return true, loop
 		}
 	}
-	return nil
+	return false, Loop{}
 }
 
-func (s *Peg) alternative() Node {
+func (s *Peg) alternative() (bool, Alternative) {
 	nodes := []Loop{}
-	if loop := s.loop(); loop != nil {
-		nodes = append(nodes, loop.(Loop))
+	if ok, loop := s.loop(); ok {
+		nodes = append(nodes, loop)
 		pos := s.parser.Mark()
 		for {
-			if alternative_1 := s.alternative_1(); alternative_1 != nil {
-				nodes = append(nodes, alternative_1.(Loop))
+			if ok, alternative_1 := s.alternative_1(); ok {
+				nodes = append(nodes, alternative_1)
 				pos = s.parser.Mark()
 			} else {
 				break
 			}
 		}
 		s.parser.Reset(pos)
-		return Alternative{nodes}
+		return true, Alternative{nodes}
 	}
-	return nil
+	return false, Alternative{}
 }
 
 func (s *Peg) loop_1() loop_mode {
@@ -184,53 +184,53 @@ func (s *Peg) loop_1() loop_mode {
 	return l_none
 }
 
-func (s *Peg) loop() Node {
-	if atom := s.atom(); atom != nil {
-		return Loop{s.loop_1(), atom}
+func (s *Peg) loop() (bool, Loop) {
+	if ok, atom := s.atom(); ok {
+		return true, Loop{s.loop_1(), atom}
 	}
-	return nil
+	return false, Loop{}
 }
 
-func (s *Peg) atom() Node {
+func (s *Peg) atom() (bool, Node) {
 	pos := s.parser.Mark()
-	if item := s.item(); item != nil {
-		return item
+	if ok, item := s.item(); ok {
+		return true, item
 	}
 	s.parser.Reset(pos)
 	if ok := s.parser.String("("); ok {
 		if s.__() {
-			if body := s.body(); body != nil {
+			if ok, body := s.body(); ok {
 				if s.__() {
 					if ok := s.parser.String(")"); ok {
-						return body
+						return true, body
 					}
 				}
 			}
 		}
 	}
 	s.parser.Reset(pos)
-	return nil
+	return false, nil
 }
 
-func (s *Peg) item() Node {
+func (s *Peg) item() (bool, Literal) {
 	pos := s.parser.Mark()
 	if ok := s.parser.String("ENDMARKER"); ok {
-		return Literal{l_literal, "ENDMARKER"}
+		return true, Literal{l_literal, "ENDMARKER"}
 	}
 	s.parser.Reset(pos)
 	if ok, name := s.name(); ok {
-		return Literal{l_name, name}
+		return true, Literal{l_name, name}
 	}
 	s.parser.Reset(pos)
 	if ok, chars := s.chars(); ok {
-		return Literal{l_string, chars}
+		return true, Literal{l_string, chars}
 	}
 	s.parser.Reset(pos)
 	if ok, regex := s.regex(); ok {
-		return Literal{l_regex, regex}
+		return true, Literal{l_regex, regex}
 	}
 	s.parser.Reset(pos)
-	return nil
+	return false, Literal{}
 }
 
 func (s *Peg) name() (bool, string) {
@@ -279,6 +279,6 @@ func (s *Peg) __() bool {
 	return false
 }
 
-func (s *Peg) Parse() Node {
+func (s *Peg) Parse() (bool, Node) {
 	return s.grammar()
 }
