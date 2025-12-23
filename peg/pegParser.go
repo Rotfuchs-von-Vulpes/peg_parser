@@ -263,7 +263,7 @@ func (s *Peg) chars() (bool, string) {
 
 func (s *Peg) regex() (bool, string) {
 	if ok := s.parser.String("["); ok {
-		if ok, str := s.parser.Regex("([|])!.(((\\\\)!.([|]))!.)+"); ok {
+		if ok, str := s.parser.Regex("(\\[|\\])!.(((\\\\)!.(\\[|\\]))!.)+"); ok {
 			if ok := s.parser.String("]"); ok {
 				return true, str
 			}
