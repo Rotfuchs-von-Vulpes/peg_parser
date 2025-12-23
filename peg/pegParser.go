@@ -279,6 +279,6 @@ func (s *Peg) __() bool {
 	return false
 }
 
-func (s *Peg) Parse() (bool, Node) {
+func (s *Peg) Parse() (bool, Grammar) {
 	return s.grammar()
 }
