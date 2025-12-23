@@ -310,19 +310,23 @@ func UseStack(stack []State, str string) bool {
 	return test(stack, runes, 0, 0, false, false)
 }
 
-var memo map[string]*[]State
+var memo map[string][]State
+
+func Start() {
+	memo = make(map[string][]State)
+}
 
 func Run(regex, str string) bool {
-	var s *[]State
-	var ok bool
-	if s, ok = memo[regex]; !ok {
-		r := GetRegexParser(regex)
-		n := r.Parse()
-		if n.Typ == "" {
-			panic("failed to parse " + regex + " regex")
-		}
-		ss := GetRegexStack(n)
-		s = &ss
+	if s, ok := memo[regex]; ok {
+		return UseStack(s, str)
 	}
-	return UseStack(*s, str)
+	fmt.Println(regex)
+	r := GetRegexParser(regex)
+	n := r.Parse()
+	if n.Typ == "" {
+		panic("failed to parse " + regex + " regex")
+	}
+	s := GetRegexStack(n)
+	memo[regex] = s
+	return UseStack(s, str)
 }

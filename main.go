@@ -2,6 +2,7 @@ package main
 
 import (
 	"main/peg"
+	"main/regex"
 	"os"
 	"strings"
 )
@@ -20,12 +21,13 @@ func getName(path string) string {
 func main() {
 	args := os.Args[1:]
 	if len(args) >= 1 {
+		regex.Start()
 		file, err := os.ReadFile(args[0])
 		if err != nil {
 			panic(err.Error())
 		}
 		pegP := peg.GetPegParser(string(file))
-		if grammar, ok := pegP.Parse().(peg.Grammar); ok {
+		if ok, grammar := pegP.Parse(); ok {
 			c := peg.GetPegCompiler(grammar, getName(args[0]))
 			if len(args) == 2 {
 				c.Compile(args[1])
