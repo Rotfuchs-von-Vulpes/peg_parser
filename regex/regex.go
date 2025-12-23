@@ -247,6 +247,10 @@ func meta(r, meta rune) bool {
 		if r == '\t' {
 			return true
 		}
+	default:
+		if r == meta {
+			return true
+		}
 	}
 	return false
 }
@@ -266,8 +270,6 @@ func test(stack []State, runes []rune, index, pos int, inside_not bool, fromFron
 			}
 		case "meta":
 			if meta(r, next.Value) && test(stack, runes, index+1, next.ID, inside_not, false) {
-				return true
-			} else if r == next.Value && test(stack, runes, index+1, next.ID, inside_not, false) {
 				return true
 			}
 		case "not":
