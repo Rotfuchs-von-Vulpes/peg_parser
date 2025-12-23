@@ -174,18 +174,15 @@ func (s *Stack) capture(capture Node) {
 		mark := s.count
 		s.count += 1
 		s.states = append(s.states, State{s.count, []StateIn{}})
-		initList := []int{}
 		endlist := []int{}
 		for _, group := range capture.Children {
-			initList = append(initList, s.count)
+			s.states[mark].next = append(s.states[mark].next, StateIn{s.count, "jump", 0})
 			s.group(group)
 			endlist = append(endlist, s.count)
 			s.count += 1
 			s.states = append(s.states, State{s.count, []StateIn{}})
 		}
 		for i := range capture.Children {
-			init := initList[i]
-			s.states[mark].next = append(s.states[mark].next, StateIn{init, "jump", 0})
 			end := endlist[i]
 			s.states[end].next[0].ID = s.count
 		}
