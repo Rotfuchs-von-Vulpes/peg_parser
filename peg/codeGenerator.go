@@ -100,11 +100,15 @@ func (s *RuleProg) writeElseBreak() {
 	s.tabs -= 1
 }
 
-func (s *RuleProg) addRule(rule string, add bool) {
+func (s *RuleProg) addRule(rule string, add bool, not bool) {
 	if rule == "" {
 		panic("empty rule name")
 	}
-	s.writeIf(fmt.Sprintf("if %s := s.%s(); %s.Typ != \"\"", rule, rule, rule))
+	if not {
+		s.writeIf(fmt.Sprintf("if %s := s.%s(); %s.Typ == \"\"", rule, rule, rule))
+	} else {
+		s.writeIf(fmt.Sprintf("if %s := s.%s(); %s.Typ != \"\"", rule, rule, rule))
+	}
 	if add {
 		s.write(fmt.Sprintf("@3nodes = append(nodes, %s.Children...)@1", rule))
 	} else {
@@ -112,7 +116,7 @@ func (s *RuleProg) addRule(rule string, add bool) {
 	}
 }
 
-func (s *RuleProg) addString(str string, add bool) {
+func (s *RuleProg) addString(str string, add, not bool) {
 	if str == "" {
 		panic("empty string")
 	}
@@ -127,16 +131,24 @@ func (s *RuleProg) addString(str string, add bool) {
 			final.WriteRune(r)
 		}
 	}
-	s.writeIf(fmt.Sprintf("if ok := s.parser.String(\"%s\"); ok", final.String()))
-	if add {
-		s.write(fmt.Sprintf("@3nodes = append(nodes, Node{\"string\", \"%s\", []Node{}})@1", final.String()))
+	if not {
+		s.writeIf("if ok := s.parser.String(\"" + final.String() + "\"); !ok")
+	} else {
+		s.writeIf(fmt.Sprintf("if ok := s.parser.String(\"%s\"); ok", final.String()))
+		if add {
+			s.write(fmt.Sprintf("@3nodes = append(nodes, Node{\"string\", \"%s\", []Node{}})@1", final.String()))
+		}
 	}
 }
 
-func (s *RuleProg) addLiteral(literal string) {
+func (s *RuleProg) addLiteral(literal string, not bool) {
 	switch literal {
 	case "ENDMARKER":
-		s.writeIf("if ok := s.parser.Expect(0); ok")
+		if not {
+			s.writeIf("if ok := s.parser.Expect(0); !ok")
+		} else {
+			s.writeIf("if ok := s.parser.Expect(0); ok")
+		}
 	default:
 		panic("unknow literal: " + literal)
 	}
@@ -165,12 +177,16 @@ func bakeString(str string) string {
 	return final.String()
 }
 
-func (s *RuleProg) addRegex(regex string) {
-	s.writeIf("if ok, str := s.parser.Regex(\"" + bakeString(regex) + "\"); ok")
-	s.write("@3nodes = append(nodes, Node{\"string\", str, []Node{}})@1")
+func (s *RuleProg) addRegex(regex string, not bool) {
+	if not {
+		s.writeIf("if ok, _ := s.parser.Regex(\"" + bakeString(regex) + "\"); !ok")
+	} else {
+		s.writeIf("if ok, str := s.parser.Regex(\"" + bakeString(regex) + "\"); ok")
+		s.write("@3nodes = append(nodes, Node{\"string\", str, []Node{}})@1")
+	}
 }
 
-func (s *RuleProg) atom(atom Node, variable bool) bool {
+func (s *RuleProg) atom(atom Node, variable bool, not bool) bool {
 	if atom == nil {
 		panic("atom is nil")
 	}
@@ -178,17 +194,17 @@ func (s *RuleProg) atom(atom Node, variable bool) bool {
 	if literal, ok := atom.(Literal); ok {
 		switch literal.Type {
 		case l_literal:
-			s.addLiteral(literal.Value)
+			s.addLiteral(literal.Value, not)
 		case l_name:
-			s.addRule(literal.Value, false)
+			s.addRule(literal.Value, false, not)
 		case l_regex:
-			s.addRegex(literal.Value)
+			s.addRegex(literal.Value, not)
 		case l_string:
-			s.addString(literal.Value, variable)
+			s.addString(literal.Value, variable, not)
 		}
 	} else if body, ok := atom.(Body); ok {
 		s.addSubRule(body)
-		s.addRule(s.name+"_"+strconv.Itoa(s.subRuleCount), true)
+		s.addRule(s.name+"_"+strconv.Itoa(s.subRuleCount), true, not)
 		final = true
 	} else {
 		panic("atom has illegal type")
@@ -200,15 +216,15 @@ func (s *RuleProg) loop(loop Loop, various, pos_is_added bool) bool {
 	add_pos := pos_is_added
 	switch loop.Mode {
 	case l_none:
-		s.atom(loop.Child, various)
+		s.atom(loop.Child, various, loop.Not)
 	case l_zero_or_one:
-		s.atom(loop.Child, true)
+		s.atom(loop.Child, true, loop.Not)
 		s.close()
 		s.writeCloseCatcher()
 	case l_zero_or_more:
 		s.writeMark(add_pos)
 		s.writeRuleFor()
-		s.atom(loop.Child, various)
+		s.atom(loop.Child, various, loop.Not)
 		s.writeNewPos()
 		s.close()
 		s.writeElseBreak()
@@ -216,13 +232,13 @@ func (s *RuleProg) loop(loop Loop, various, pos_is_added bool) bool {
 		s.writeCloseCatcher()
 		add_pos = true
 	case l_one_or_more:
-		sub := s.atom(loop.Child, various)
+		sub := s.atom(loop.Child, various, loop.Not)
 		s.writeMark(add_pos)
 		s.writeRuleFor()
 		if sub {
-			s.addRule(s.name+"_"+strconv.Itoa(s.subRuleCount), true)
+			s.addRule(s.name+"_"+strconv.Itoa(s.subRuleCount), true, loop.Not)
 		} else {
-			s.atom(loop.Child, various)
+			s.atom(loop.Child, various, loop.Not)
 		}
 		s.writeNewPos()
 		s.close()

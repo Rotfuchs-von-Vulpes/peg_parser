@@ -39,6 +39,7 @@ const (
 type Loop struct {
 	Mode  loop_mode
 	Child Node
+	Not   bool
 }
 
 type LiteralType int
@@ -185,8 +186,12 @@ func (s *Peg) loop_1() loop_mode {
 }
 
 func (s *Peg) loop() (bool, Loop) {
+	not := false
+	if ok := s.parser.String("!"); ok {
+		not = true
+	}
 	if ok, atom := s.atom(); ok {
-		return true, Loop{s.loop_1(), atom}
+		return true, Loop{s.loop_1(), atom, not}
 	}
 	return false, Loop{}
 }
