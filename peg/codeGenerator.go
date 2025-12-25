@@ -218,8 +218,10 @@ func (s *RuleProg) loop(loop Loop, various, pos_is_added bool) bool {
 	case l_none:
 		s.atom(loop.Child, various, loop.Not)
 	case l_zero_or_one:
+		s.writeMark(add_pos)
 		s.atom(loop.Child, true, loop.Not)
 		s.close()
+		s.writeReset()
 		s.writeCloseCatcher()
 	case l_zero_or_more:
 		s.writeMark(add_pos)
