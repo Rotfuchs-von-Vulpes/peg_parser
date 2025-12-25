@@ -318,6 +318,15 @@ func (s *PegCompiler) rule(rule Rule) {
 	s.rules = append(s.rules, r)
 }
 
+func (s *PegCompiler) eachSubRule(rule RuleProg) string {
+	var final strings.Builder
+	for _, subRule := range rule.subRules {
+		final.WriteString(s.eachSubRule(subRule))
+		final.WriteString(subRule.program + "\n\n")
+	}
+	return final.String()
+}
+
 func (s *PegCompiler) Compile(path string) {
 	name := s.lang
 	langB := strings.Builder{}
@@ -357,9 +366,7 @@ func Get@1Parser(text string) @1 {
 	finalProg = strings.ReplaceAll(finalProg, "@1", s.lang)
 	finalProg = strings.ReplaceAll(finalProg, "@2", name)
 	for _, rule := range s.rules {
-		for _, subRule := range rule.subRules {
-			finalProg += subRule.program + "\n\n"
-		}
+		finalProg += s.eachSubRule(rule)
 		finalProg += rule.program + "\n\n"
 	}
 	finalProg += "func (s *" + s.lang + ") Parse() Node {\n\treturn s." + s.data.Rules[0].name + "()\n}"
