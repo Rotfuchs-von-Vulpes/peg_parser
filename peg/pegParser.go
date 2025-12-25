@@ -96,9 +96,7 @@ func (s *Peg) rule() (bool, Rule) {
 				if s.__() {
 					if ok, body := s.body(); ok {
 						if s.__() {
-							if ok, _ := s.parser.Regex("\\r\\n"); ok {
-								return true, Rule{name, body}
-							}
+							return true, Rule{name, body}
 						}
 					}
 				}
@@ -217,6 +215,15 @@ func (s *Peg) atom() (bool, Node) {
 	return false, nil
 }
 
+func (s *Peg) item_1() bool {
+	if ok := s.__(); ok {
+		if ok := s.parser.String(":"); ok {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Peg) item() (bool, Literal) {
 	pos := s.parser.Mark()
 	if ok := s.parser.String("ENDMARKER"); ok {
@@ -224,7 +231,9 @@ func (s *Peg) item() (bool, Literal) {
 	}
 	s.parser.Reset(pos)
 	if ok, name := s.name(); ok {
-		return true, Literal{l_name, name}
+		if !s.item_1() {
+			return true, Literal{l_name, name}
+		}
 	}
 	s.parser.Reset(pos)
 	if ok, chars := s.chars(); ok {
@@ -278,7 +287,7 @@ func (s *Peg) regex() (bool, string) {
 }
 
 func (s *Peg) __() bool {
-	if ok, _ := s.parser.Regex("( |\\t)*"); ok {
+	if ok, _ := s.parser.Regex("( |\\t|\\r|\\n)*"); ok {
 		return true
 	}
 	return false
