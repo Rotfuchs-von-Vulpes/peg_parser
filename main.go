@@ -2,7 +2,6 @@ package main
 
 import (
 	"main/peg"
-	"main/regex"
 	"os"
 	"strings"
 )
@@ -21,7 +20,6 @@ func getName(path string) string {
 func main() {
 	args := os.Args[1:]
 	if len(args) >= 1 {
-		regex.Start()
 		file, err := os.ReadFile(args[0])
 		if err != nil {
 			panic(err.Error())
