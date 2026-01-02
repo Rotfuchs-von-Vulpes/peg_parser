@@ -1,4 +1,4 @@
-package pegParser
+package main
 
 import (
 	"os"

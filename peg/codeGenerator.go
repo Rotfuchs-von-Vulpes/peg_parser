@@ -72,18 +72,18 @@ func (s *RuleProg) writeReturn() {
 
 func (s *RuleProg) writeMark(old bool) {
 	if old {
-		s.write("@3pos = s.parser.Mark()@1")
+		s.write("@3pos = s.scanner.Mark()@1")
 	} else {
-		s.write("@3pos := s.parser.Mark()@1")
+		s.write("@3pos := s.scanner.Mark()@1")
 	}
 }
 
 func (s *RuleProg) writeNewPos() {
-	s.write("@3pos = s.parser.Mark()@1")
+	s.write("@3pos = s.scanner.Mark()@1")
 }
 
 func (s *RuleProg) writeReset() {
-	s.write("@3s.parser.Reset(pos)@1")
+	s.write("@3s.scanner.Reset(pos)@1")
 }
 
 func (s *RuleProg) writeIf(ifStr string) {
@@ -138,9 +138,9 @@ func (s *RuleProg) addString(str string, add, not bool) {
 		}
 	}
 	if not {
-		s.writeIf("if ok := s.parser.String(\"" + final.String() + "\"); !ok")
+		s.writeIf("if ok := s.scanner.String(\"" + final.String() + "\"); !ok")
 	} else {
-		s.writeIf(fmt.Sprintf("if ok := s.parser.String(\"%s\"); ok", final.String()))
+		s.writeIf(fmt.Sprintf("if ok := s.scanner.String(\"%s\"); ok", final.String()))
 		if add {
 			s.write(fmt.Sprintf("@3nodes = append(nodes, Node{\"string\", \"%s\", []Node{}})@1", final.String()))
 		}
@@ -151,9 +151,9 @@ func (s *RuleProg) addLiteral(literal string, not bool) {
 	switch literal {
 	case "ENDMARKER":
 		if not {
-			s.writeIf("if ok := s.parser.Expect(0); !ok")
+			s.writeIf("if ok := s.scanner.Expect(0); !ok")
 		} else {
-			s.writeIf("if ok := s.parser.Expect(0); ok")
+			s.writeIf("if ok := s.scanner.Expect(0); ok")
 		}
 	default:
 		panic("Unknow literal: " + literal)
@@ -185,9 +185,9 @@ func bakeString(str string) string {
 
 func (s *RuleProg) addRegex(regex string, not bool) {
 	if not {
-		s.writeIf("if ok, _ := regex.Run(&s.scanner, \"" + bakeString(regex) + "\"); !ok")
+		s.writeIf("if ok, _ := langKit.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); !ok")
 	} else {
-		s.writeIf("if ok, str := regex.Run(&s.scanner, \"" + bakeString(regex) + "\"); ok")
+		s.writeIf("if ok, str := langKit.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); ok")
 		s.write("@3nodes = append(nodes, Node{\"string\", str, []Node{}})@1")
 	}
 }
@@ -421,9 +421,9 @@ func (s *PegCompiler) rule(rule Rule) {
 			capitalize = true
 		}
 	}
-	t := newTypeConstrutor(b.String(), rule.name)
-	fmt.Println(rule.name)
-	t.getAddedBody(rule.body)
+	// t := newTypeConstrutor(b.String(), rule.name)
+	// fmt.Println(rule.name)
+	// t.getAddedBody(rule.body)
 	r.body(rule.body)
 	r.writeReturnNull()
 	s.rules = append(s.rules, r)
@@ -456,8 +456,7 @@ func (s *PegCompiler) Compile(path string) {
 	finalProg := `package @2
 
 import (
-	"main/regex"
-	"main/scanner"
+	"github.com/Rotfuchs-von-Vulpes/langKit"
 )
 
 type Node struct {
@@ -467,11 +466,11 @@ type Node struct {
 }
 
 type @1 struct {
-	parser parser.Tokenizer
+	scanner langKit.Scanner
 }
 
 func Get@1Parser(text string) @1 {
-	return @1{parser.GetTokenizer(text)}
+	return @1{langKit.GetScanner(text)}
 }
 
 `
