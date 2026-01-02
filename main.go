@@ -1,8 +1,8 @@
-package main
+package pegParser
 
 import (
-	"main/peg"
 	"os"
+	"pegParser/peg"
 	"strings"
 )
 
