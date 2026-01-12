@@ -49,7 +49,7 @@ func (s *RuleProg) write(code string) {
 }
 
 func (s *RuleProg) create() {
-	s.program += fmt.Sprintf("func (s *%s) %s () Node {\n\tnodes := []Node{}@1\n}", s.lang, s.name)
+	s.program += fmt.Sprintf("func (s *%s) %s () (bool, Node) {\n\tnodes := []Node{}\n\tfields := []string{}@1\n}", s.lang, s.name)
 }
 
 func (s *RuleProg) writeCloseCatcher() {
@@ -57,14 +57,14 @@ func (s *RuleProg) writeCloseCatcher() {
 }
 
 func (s *RuleProg) writeReturnNull() {
-	s.write("@3return Node{}")
+	s.write("@3return false, Node{}")
 	if s.tabs > 1 {
 		s.tabs -= 1
 	}
 }
 
 func (s *RuleProg) writeReturn() {
-	s.write(fmt.Sprintf("@3return Node{\"%s\", \"\", nodes}", s.name))
+	s.write(fmt.Sprintf("@3return true, Node{\"%s\", fields, nodes}", s.name))
 	if s.tabs > 1 {
 		s.tabs -= 1
 	}
@@ -106,23 +106,29 @@ func (s *RuleProg) writeElse() {
 	s.tabs += 1
 }
 
-func (s *RuleProg) addRule(rule string, add bool, not bool) {
+func (s *RuleProg) addRule(rule string, add, not, relevant bool) {
 	if rule == "" {
 		panic("Empty rule name")
 	}
 	if not {
-		s.writeIf(fmt.Sprintf("if %s := s.%s(); %s.Typ == \"\"", rule, rule, rule))
+		s.writeIf(fmt.Sprintf("if ok, _ := s.%s(); !ok", rule))
 	} else {
-		s.writeIf(fmt.Sprintf("if %s := s.%s(); %s.Typ != \"\"", rule, rule, rule))
-	}
-	if add {
-		s.write(fmt.Sprintf("@3nodes = append(nodes, %s.Children...)@1", rule))
-	} else {
-		s.write(fmt.Sprintf("@3nodes = append(nodes, %s)@1", rule))
+		if add {
+			s.writeIf(fmt.Sprintf("if ok, %s := s.%s(); ok", rule, rule))
+			s.write(fmt.Sprintf("@3nodes = append(nodes, %s.Children...)@1", rule))
+			s.write(fmt.Sprintf("@3fields = append(fields, %s.Fields...)@1", rule))
+		} else {
+			if relevant {
+				s.writeIf(fmt.Sprintf("if ok, %s := s.%s(); ok", rule, rule))
+				s.write(fmt.Sprintf("@3nodes = append(nodes, %s)@1", rule))
+			} else {
+				s.writeIf(fmt.Sprintf("if ok, _ := s.%s(); ok", rule))
+			}
+		}
 	}
 }
 
-func (s *RuleProg) addString(str string, add, not bool) {
+func (s *RuleProg) addString(str string, not bool, tag string) {
 	if str == "" {
 		panic("Empty string")
 	}
@@ -141,8 +147,8 @@ func (s *RuleProg) addString(str string, add, not bool) {
 		s.writeIf("if ok := s.scanner.String(\"" + final.String() + "\"); !ok")
 	} else {
 		s.writeIf(fmt.Sprintf("if ok := s.scanner.String(\"%s\"); ok", final.String()))
-		if add {
-			s.write(fmt.Sprintf("@3nodes = append(nodes, Node{\"string\", \"%s\", []Node{}})@1", final.String()))
+		if tag != "" {
+			s.write(fmt.Sprintf("@3fields = append(fields, \"%s\")@1", tag))
 		}
 	}
 }
@@ -183,31 +189,35 @@ func bakeString(str string) string {
 	return final.String()
 }
 
-func (s *RuleProg) addRegex(regex string, not bool) {
+func (s *RuleProg) addRegex(regex string, not, relevant bool) {
 	if not {
 		s.writeIf("if ok, _ := langKit.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); !ok")
 	} else {
-		s.writeIf("if ok, str := langKit.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); ok")
-		s.write("@3nodes = append(nodes, Node{\"string\", str, []Node{}})@1")
+		if relevant {
+			s.writeIf("if ok, str := langKit.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); ok")
+			s.write("@3fields = append(fields, str)@1")
+		} else {
+			s.writeIf("if ok, _ := langKit.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); ok")
+		}
 	}
 }
 
-func (s *RuleProg) atom(atom Node, variable bool, not bool) bool {
+func (s *RuleProg) atom(atom Node, not bool) bool {
 	final := false
 	if literal, ok := atom.(Literal); ok {
 		switch literal.Type {
 		case l_literal:
 			s.addLiteral(literal.Value, not)
 		case l_name:
-			s.addRule(literal.Value, false, not)
+			s.addRule(literal.Value, false, not, literal.Add)
 		case l_regex:
-			s.addRegex(literal.Value, not)
+			s.addRegex(literal.Value, not, literal.Add)
 		case l_string:
-			s.addString(literal.Value, variable, not)
+			s.addString(literal.Value, not, literal.AddId)
 		}
 	} else if body, ok := atom.(Body); ok {
 		s.addSubRule(body)
-		s.addRule(s.name+"_"+strconv.Itoa(s.subRuleCount), true, not)
+		s.addRule(s.name+"_"+strconv.Itoa(s.subRuleCount), true, not, false)
 		final = true
 	} else {
 		panic("Atom has illegal type")
@@ -215,14 +225,14 @@ func (s *RuleProg) atom(atom Node, variable bool, not bool) bool {
 	return final
 }
 
-func (s *RuleProg) loop(loop Loop, various, pos_is_added bool) bool {
+func (s *RuleProg) loop(loop Loop, pos_is_added bool) bool {
 	add_pos := pos_is_added
 	switch loop.Mode {
 	case l_none:
-		s.atom(loop.Child, various, loop.Not)
+		s.atom(loop.Child, loop.Not)
 	case l_zero_or_one:
 		s.writeMark(add_pos)
-		s.atom(loop.Child, true, loop.Not)
+		s.atom(loop.Child, loop.Not)
 		s.close()
 		s.writeElse()
 		s.writeReset()
@@ -231,7 +241,7 @@ func (s *RuleProg) loop(loop Loop, various, pos_is_added bool) bool {
 	case l_zero_or_more:
 		s.writeMark(add_pos)
 		s.writeRuleFor()
-		s.atom(loop.Child, various, loop.Not)
+		s.atom(loop.Child, loop.Not)
 		s.writeNewPos()
 		s.close()
 		s.writeElseBreak()
@@ -239,13 +249,13 @@ func (s *RuleProg) loop(loop Loop, various, pos_is_added bool) bool {
 		s.writeCloseCatcher()
 		add_pos = true
 	case l_one_or_more:
-		sub := s.atom(loop.Child, various, loop.Not)
+		sub := s.atom(loop.Child, loop.Not)
 		s.writeMark(add_pos)
 		s.writeRuleFor()
 		if sub {
-			s.addRule(s.name+"_"+strconv.Itoa(s.subRuleCount), true, loop.Not)
+			s.addRule(s.name+"_"+strconv.Itoa(s.subRuleCount), true, loop.Not, false)
 		} else {
-			s.atom(loop.Child, various, loop.Not)
+			s.atom(loop.Child, loop.Not)
 		}
 		s.writeNewPos()
 		s.close()
@@ -256,13 +266,13 @@ func (s *RuleProg) loop(loop Loop, various, pos_is_added bool) bool {
 	return add_pos
 }
 
-func (s *RuleProg) alternative(alt Alternative, variable bool) {
+func (s *RuleProg) alternative(alt Alternative) {
 	if len(alt.Loops) == 0 {
 		panic("Zero loop as unexpected")
 	}
 	add_pos := false
 	for _, loop := range alt.Loops {
-		add_pos = s.loop(loop, variable, add_pos)
+		add_pos = s.loop(loop, add_pos)
 	}
 	for i := range alt.Loops {
 		if i == 0 {
@@ -278,26 +288,13 @@ func (s *RuleProg) body(body Body) {
 		panic("No body children as unexpected")
 	}
 	if len(body.Alts) > 1 {
-		variable := false
-		for _, alt := range body.Alts {
-			if len(alt.Loops) == 1 {
-				loop := alt.Loops[0]
-				atom := loop.Child
-				if literal, ok := atom.(Literal); ok {
-					if literal.Type == l_string {
-						variable = true
-						break
-					}
-				}
-			}
-		}
 		s.writeMark(false)
 		for _, alt := range body.Alts {
-			s.alternative(alt, variable)
+			s.alternative(alt)
 			s.writeReset()
 		}
 	} else {
-		s.alternative(body.Alts[0], false)
+		s.alternative(body.Alts[0])
 	}
 }
 
@@ -318,91 +315,6 @@ func newRule(lang, name string) RuleProg {
 	return r
 }
 
-type TypeConstrutor struct {
-	name       string
-	rule       string
-	values     []string
-	nodes      []string
-	enums      []string
-	regexCount int
-}
-
-type AddedType int
-
-const (
-	a_none AddedType = iota
-	a_node
-	a_string
-	a_regex
-)
-
-type AddedData struct {
-	name string
-	typ  AddedType
-}
-
-func (s *TypeConstrutor) getAddedAtom(atom Node) (bool, AddedData) {
-	final := false
-	added := AddedData{}
-	if literal, ok := atom.(Literal); ok {
-		if literal.Add {
-			switch literal.Type {
-			case l_name:
-				s.nodes = append(s.nodes, literal.Value)
-				added.name = literal.Value
-				added.typ = a_node
-				final = true
-			case l_regex:
-				s.values = append(s.values, s.name+"_"+strconv.Itoa(s.regexCount))
-				s.regexCount += 1
-				added.name = s.rule
-				added.typ = a_regex
-				final = true
-			case l_string:
-				s.enums = append(s.enums, literal.Value)
-				added.name = literal.Value
-				added.typ = a_string
-				final = true
-			case l_literal:
-			}
-		}
-	} else if body, ok := atom.(Body); ok {
-		s.getAddedBody(body)
-	} else {
-		panic("Atom has illegal type")
-	}
-
-	return final, added
-}
-
-func (s *TypeConstrutor) getAddedLoop(loop Loop) (bool, AddedData) {
-	return s.getAddedAtom(loop.Child)
-}
-
-func (s *TypeConstrutor) getAddedAlts(alt Alternative) (bool, []AddedData) {
-	final := false
-	typs := []AddedData{}
-	for _, loop := range alt.Loops {
-		if ok, typ := s.getAddedLoop(loop); ok {
-			final = true
-			typs = append(typs, typ)
-		}
-	}
-	return final, typs
-}
-
-func (s *TypeConstrutor) getAddedBody(body Body) {
-	for _, alt := range body.Alts {
-		if ok, typs := s.getAddedAlts(alt); ok {
-			fmt.Println(typs)
-		}
-	}
-}
-
-func newTypeConstrutor(name, rule string) TypeConstrutor {
-	return TypeConstrutor{name, rule, []string{}, []string{}, []string{}, 1}
-}
-
 func (s *PegCompiler) rule(rule Rule) {
 	r := newRule(s.lang, rule.name)
 	b := strings.Builder{}
@@ -421,9 +333,6 @@ func (s *PegCompiler) rule(rule Rule) {
 			capitalize = true
 		}
 	}
-	// t := newTypeConstrutor(b.String(), rule.name)
-	// fmt.Println(rule.name)
-	// t.getAddedBody(rule.body)
 	r.body(rule.body)
 	r.writeReturnNull()
 	s.rules = append(s.rules, r)
@@ -461,7 +370,7 @@ import (
 
 type Node struct {
 	Typ      string
-	Value    string
+	Fields   []string
 	Children []Node
 }
 
@@ -480,7 +389,7 @@ func Get@1Parser(text string) @1 {
 		finalProg += s.eachSubRule(rule)
 		finalProg += rule.program + "\n\n"
 	}
-	finalProg += "func (s *" + s.lang + ") Parse() Node {\n\treturn s." + s.data.Rules[0].name + "()\n}"
+	finalProg += "func (s *" + s.lang + ") Parse() (bool, Node) {\n\treturn s." + s.data.Rules[0].name + "()\n}"
 	os.Mkdir(path+name+"/", os.ModePerm)
 	os.Remove(fmt.Sprintf(path+"%s/%s.go", name, name))
 	os.WriteFile(fmt.Sprintf(path+"%s/%s.go", name, name), []byte(finalProg), fs.ModeAppend)
