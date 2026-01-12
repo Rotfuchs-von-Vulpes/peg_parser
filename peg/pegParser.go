@@ -1,7 +1,8 @@
 package peg
 
 import (
-	"github.com/Rotfuchs-von-Vulpes/langKit"
+	"pegParser/regex"
+	sc "pegParser/scanner"
 )
 
 type Node2 struct {
@@ -54,17 +55,18 @@ const (
 type Literal struct {
 	Type  LiteralType
 	Add   bool
+	AddId string
 	Value string
 }
 
 type Node any
 
 type Peg struct {
-	parser langKit.Scanner
+	parser sc.Scanner
 }
 
 func GetPegParser(text string) Peg {
-	return Peg{langKit.GetScanner(text)}
+	return Peg{sc.GetScanner(text)}
 }
 
 func (s *Peg) grammar() (bool, Grammar) {
@@ -216,7 +218,21 @@ func (s *Peg) atom() (bool, Node) {
 	return false, nil
 }
 
-func (s *Peg) item_1() bool {
+func (s *Peg) item_1() (bool, string) {
+	addId := ""
+	pos := s.parser.Mark()
+	if ok, name := s.name(); ok {
+		addId = name
+	} else {
+		s.parser.Reset(pos)
+	}
+	if ok := s.parser.String("."); ok {
+		return true, addId
+	}
+	return false, ""
+}
+
+func (s *Peg) item_2() bool {
 	if ok := s.__(); ok {
 		if ok := s.parser.String(":"); ok {
 			return true
@@ -227,33 +243,38 @@ func (s *Peg) item_1() bool {
 
 func (s *Peg) item() (bool, Literal) {
 	add := false
-	if ok := s.parser.String("."); ok {
-		add = true
-	}
+	addId := ""
 	pos := s.parser.Mark()
+	if ok, id := s.item_1(); ok {
+		add = true
+		addId = id
+	} else {
+		s.parser.Reset(pos)
+	}
+	pos = s.parser.Mark()
 	if ok := s.parser.String("ENDMARKER"); ok {
-		return true, Literal{l_literal, false, "ENDMARKER"}
+		return true, Literal{l_literal, false, "", "ENDMARKER"}
 	}
 	s.parser.Reset(pos)
 	if ok, name := s.name(); ok {
-		if !s.item_1() {
-			return true, Literal{l_name, add, name}
+		if !s.item_2() {
+			return true, Literal{l_name, add, addId, name}
 		}
 	}
 	s.parser.Reset(pos)
 	if ok, chars := s.chars(); ok {
-		return true, Literal{l_string, add, chars}
+		return true, Literal{l_string, add, addId, chars}
 	}
 	s.parser.Reset(pos)
 	if ok, rgx := s.rgx(); ok {
-		return true, Literal{l_regex, add, rgx}
+		return true, Literal{l_regex, add, addId, rgx}
 	}
 	s.parser.Reset(pos)
 	return false, Literal{}
 }
 
 func (s *Peg) name() (bool, string) {
-	if ok, str := langKit.RunRegex(&s.parser, "(\\w|\\a|_)+"); ok {
+	if ok, str := regex.RunRegex(&s.parser, "(\\w|\\a|_)+"); ok {
 		return true, str
 	}
 	return false, ""
@@ -262,7 +283,7 @@ func (s *Peg) name() (bool, string) {
 func (s *Peg) chars() (bool, string) {
 	pos := s.parser.Mark()
 	if ok := s.parser.String("'"); ok {
-		if ok, str := langKit.RunRegex(&s.parser, "((')!.)+"); ok {
+		if ok, str := regex.RunRegex(&s.parser, "((')!.)+"); ok {
 			if ok := s.parser.String("'"); ok {
 				return true, str
 			}
@@ -270,7 +291,7 @@ func (s *Peg) chars() (bool, string) {
 	}
 	s.parser.Reset(pos)
 	if ok := s.parser.String("\""); ok {
-		if ok, str := langKit.RunRegex(&s.parser, "((\")!.)+"); ok {
+		if ok, str := regex.RunRegex(&s.parser, "((\")!.)+"); ok {
 			if ok := s.parser.String("\""); ok {
 				return true, str
 			}
@@ -282,7 +303,7 @@ func (s *Peg) chars() (bool, string) {
 
 func (s *Peg) rgx() (bool, string) {
 	if ok := s.parser.String("["); ok {
-		if ok, str := langKit.RunRegex(&s.parser, "(\\[|\\])!.(((\\\\)!.(\\[|\\]))!.)+"); ok {
+		if ok, str := regex.RunRegex(&s.parser, "(\\[|\\])!.(((\\\\)!.(\\[|\\]))!.)+"); ok {
 			if ok := s.parser.String("]"); ok {
 				return true, str
 			}
@@ -292,7 +313,7 @@ func (s *Peg) rgx() (bool, string) {
 }
 
 func (s *Peg) __() bool {
-	if ok, _ := langKit.RunRegex(&s.parser, "( |\\t|\\r|\\n)*"); ok {
+	if ok, _ := regex.RunRegex(&s.parser, "( |\\t|\\r|\\n)*"); ok {
 		return true
 	}
 	return false
