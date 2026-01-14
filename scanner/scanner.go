@@ -26,7 +26,7 @@ func (s *Scanner) next() rune {
 	return r
 }
 
-func (s *Scanner) peekRune() rune {
+func (s *Scanner) PeekRune() rune {
 	if s.pos == len(s.runes) {
 		s.runes = append(s.runes, s.next())
 	}
@@ -34,7 +34,7 @@ func (s *Scanner) peekRune() rune {
 }
 
 func (s *Scanner) getRune() rune {
-	r := s.peekRune()
+	r := s.PeekRune()
 	s.pos = s.pos + 1
 	return r
 }
@@ -60,7 +60,7 @@ func (s *Scanner) Expect(arg rune) bool {
 			break
 		}
 	}
-	r := s.peekRune()
+	r := s.PeekRune()
 	if r == arg {
 		s.pos += 1
 		return true
@@ -69,7 +69,7 @@ func (s *Scanner) Expect(arg rune) bool {
 }
 
 func (s *Scanner) Rune() (bool, rune) {
-	r := s.peekRune()
+	r := s.PeekRune()
 	if r == 0 {
 		return false, 0
 	} else {
@@ -98,7 +98,7 @@ func (s *Scanner) String(arg string) bool {
 }
 
 func (s *Scanner) LowLetter() (bool, rune) {
-	r := s.peekRune()
+	r := s.PeekRune()
 	if r < 'a' || r > 'z' {
 		return false, 0
 	} else {
@@ -107,7 +107,7 @@ func (s *Scanner) LowLetter() (bool, rune) {
 }
 
 func (s *Scanner) HighLetter() (bool, rune) {
-	r := s.peekRune()
+	r := s.PeekRune()
 	if r < 'A' || r > 'Z' {
 		return false, 0
 	} else {
@@ -128,7 +128,7 @@ func (s *Scanner) Letter() (bool, rune) {
 }
 
 func (s *Scanner) Num() (bool, rune) {
-	r := s.peekRune()
+	r := s.PeekRune()
 	if (r < '1' || r > '9') && r != '0' {
 		return false, 0
 	} else {

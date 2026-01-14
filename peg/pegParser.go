@@ -16,8 +16,8 @@ type Grammar struct {
 }
 
 type Rule struct {
-	name string
-	body Body
+	Name string
+	Body Body
 }
 
 type Body struct {
@@ -31,10 +31,10 @@ type Alternative struct {
 type loop_mode int
 
 const (
-	l_none loop_mode = iota
-	l_zero_or_one
-	l_zero_or_more
-	l_one_or_more
+	L_none loop_mode = iota
+	L_zero_or_one
+	L_zero_or_more
+	L_one_or_more
 )
 
 type Loop struct {
@@ -46,10 +46,10 @@ type Loop struct {
 type LiteralType int
 
 const (
-	l_literal LiteralType = iota
-	l_name
-	l_string
-	l_regex
+	L_literal LiteralType = iota
+	L_name
+	L_string
+	L_regex
 )
 
 type Literal struct {
@@ -172,18 +172,18 @@ func (s *Peg) alternative() (bool, Alternative) {
 func (s *Peg) loop_1() loop_mode {
 	pos := s.parser.Mark()
 	if ok := s.parser.String("+"); ok {
-		return l_one_or_more
+		return L_one_or_more
 	}
 	s.parser.Reset(pos)
 	if ok := s.parser.String("*"); ok {
-		return l_zero_or_more
+		return L_zero_or_more
 	}
 	s.parser.Reset(pos)
 	if ok := s.parser.String("?"); ok {
-		return l_zero_or_one
+		return L_zero_or_one
 	}
 	s.parser.Reset(pos)
-	return l_none
+	return L_none
 }
 
 func (s *Peg) loop() (bool, Loop) {
@@ -253,21 +253,21 @@ func (s *Peg) item() (bool, Literal) {
 	}
 	pos = s.parser.Mark()
 	if ok := s.parser.String("ENDMARKER"); ok {
-		return true, Literal{l_literal, false, "", "ENDMARKER"}
+		return true, Literal{L_literal, false, "", "ENDMARKER"}
 	}
 	s.parser.Reset(pos)
 	if ok, name := s.name(); ok {
 		if !s.item_2() {
-			return true, Literal{l_name, add, addId, name}
+			return true, Literal{L_name, add, addId, name}
 		}
 	}
 	s.parser.Reset(pos)
 	if ok, chars := s.chars(); ok {
-		return true, Literal{l_string, add, addId, chars}
+		return true, Literal{L_string, add, addId, chars}
 	}
 	s.parser.Reset(pos)
 	if ok, rgx := s.rgx(); ok {
-		return true, Literal{l_regex, add, addId, rgx}
+		return true, Literal{L_regex, add, addId, rgx}
 	}
 	s.parser.Reset(pos)
 	return false, Literal{}

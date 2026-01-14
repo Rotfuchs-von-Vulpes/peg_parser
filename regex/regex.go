@@ -250,6 +250,10 @@ func meta(r, meta rune) bool {
 		if r == '\t' {
 			return true
 		}
+	case 'b':
+		if r != '[' && r != ']' {
+			return true
+		}
 	default:
 		if r == meta {
 			return true

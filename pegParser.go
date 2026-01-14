@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"pegParser/parser"
 	"pegParser/peg"
 	"strings"
 )
@@ -34,6 +36,17 @@ func main() {
 			}
 		} else {
 			panic("Parse fails")
+		}
+	} else {
+		if data, err := os.ReadFile("./input/peg_new.peg"); err == nil {
+			// parser.ParseGrammar(string(data), "Sl 21,2-6; Eclo 20,3-4; 21,2.3")
+			if sample, err := os.ReadFile("./input/toy.peg"); err == nil {
+				parser.ParseGrammar(string(data), string(sample))
+			} else {
+				fmt.Println(err.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
 		}
 	}
 }

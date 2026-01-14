@@ -49,7 +49,7 @@ func (s *RuleProg) write(code string) {
 }
 
 func (s *RuleProg) create() {
-	s.program += fmt.Sprintf("func (s *%s) %s () (bool, Node) {\n\tnodes := []Node{}\n\tfields := []string{}@1\n}", s.lang, s.name)
+	s.program += fmt.Sprintf("func (s *%s) p_%s () parseResult {\n\tnodes := []Node{}\n\tfields := []string{}@1\n}", s.lang, s.name)
 }
 
 func (s *RuleProg) writeCloseCatcher() {
@@ -57,14 +57,15 @@ func (s *RuleProg) writeCloseCatcher() {
 }
 
 func (s *RuleProg) writeReturnNull() {
-	s.write("@3return false, Node{}")
+	s.write("@3return parseResult{ok: false, nextPos: s.scanner.Mark()}")
 	if s.tabs > 1 {
 		s.tabs -= 1
 	}
+	s.program += fmt.Sprintf("\n\nfunc (s *%s) m_%s () parseResult {\n\treturn s.memoize(\"%s\", s.p_%s)\n}", s.lang, s.name, s.name, s.name)
 }
 
 func (s *RuleProg) writeReturn() {
-	s.write(fmt.Sprintf("@3return true, Node{\"%s\", fields, nodes}", s.name))
+	s.write(fmt.Sprintf("@3return parseResult{true, Node{\"%s\", fields, nodes}, s.scanner.Mark()}", s.name))
 	if s.tabs > 1 {
 		s.tabs -= 1
 	}
@@ -111,18 +112,18 @@ func (s *RuleProg) addRule(rule string, add, not, relevant bool) {
 		panic("Empty rule name")
 	}
 	if not {
-		s.writeIf(fmt.Sprintf("if ok, _ := s.%s(); !ok", rule))
+		s.writeIf(fmt.Sprintf("if res := s.m_%s(); !res.ok", rule))
 	} else {
 		if add {
-			s.writeIf(fmt.Sprintf("if ok, %s := s.%s(); ok", rule, rule))
-			s.write(fmt.Sprintf("@3nodes = append(nodes, %s.Children...)@1", rule))
-			s.write(fmt.Sprintf("@3fields = append(fields, %s.Fields...)@1", rule))
+			s.writeIf(fmt.Sprintf("if res := s.m_%s(); res.ok", rule))
+			s.write("@3nodes = append(nodes, res.node.Children...)@1")
+			s.write("@3fields = append(fields, res.node.Fields...)@1")
 		} else {
 			if relevant {
-				s.writeIf(fmt.Sprintf("if ok, %s := s.%s(); ok", rule, rule))
-				s.write(fmt.Sprintf("@3nodes = append(nodes, %s)@1", rule))
+				s.writeIf(fmt.Sprintf("if res := s.m_%s(); res.ok", rule))
+				s.write("@3nodes = append(nodes, res.node)@1")
 			} else {
-				s.writeIf(fmt.Sprintf("if ok, _ := s.%s(); ok", rule))
+				s.writeIf(fmt.Sprintf("if res := s.m_%s(); res.ok", rule))
 			}
 		}
 	}
@@ -191,13 +192,13 @@ func bakeString(str string) string {
 
 func (s *RuleProg) addRegex(regex string, not, relevant bool) {
 	if not {
-		s.writeIf("if ok, _ := langKit.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); !ok")
+		s.writeIf("if ok, _ := regex.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); !ok")
 	} else {
 		if relevant {
-			s.writeIf("if ok, str := langKit.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); ok")
+			s.writeIf("if ok, str := regex.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); ok")
 			s.write("@3fields = append(fields, str)@1")
 		} else {
-			s.writeIf("if ok, _ := langKit.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); ok")
+			s.writeIf("if ok, _ := regex.RunRegex(&s.scanner, \"" + bakeString(regex) + "\"); ok")
 		}
 	}
 }
@@ -206,13 +207,13 @@ func (s *RuleProg) atom(atom Node, not bool) bool {
 	final := false
 	if literal, ok := atom.(Literal); ok {
 		switch literal.Type {
-		case l_literal:
+		case L_literal:
 			s.addLiteral(literal.Value, not)
-		case l_name:
+		case L_name:
 			s.addRule(literal.Value, false, not, literal.Add)
-		case l_regex:
+		case L_regex:
 			s.addRegex(literal.Value, not, literal.Add)
-		case l_string:
+		case L_string:
 			s.addString(literal.Value, not, literal.AddId)
 		}
 	} else if body, ok := atom.(Body); ok {
@@ -228,9 +229,9 @@ func (s *RuleProg) atom(atom Node, not bool) bool {
 func (s *RuleProg) loop(loop Loop, pos_is_added bool) bool {
 	add_pos := pos_is_added
 	switch loop.Mode {
-	case l_none:
+	case L_none:
 		s.atom(loop.Child, loop.Not)
-	case l_zero_or_one:
+	case L_zero_or_one:
 		s.writeMark(add_pos)
 		s.atom(loop.Child, loop.Not)
 		s.close()
@@ -238,7 +239,7 @@ func (s *RuleProg) loop(loop Loop, pos_is_added bool) bool {
 		s.writeReset()
 		s.close()
 		s.writeCloseCatcher()
-	case l_zero_or_more:
+	case L_zero_or_more:
 		s.writeMark(add_pos)
 		s.writeRuleFor()
 		s.atom(loop.Child, loop.Not)
@@ -248,7 +249,7 @@ func (s *RuleProg) loop(loop Loop, pos_is_added bool) bool {
 		s.writeReset()
 		s.writeCloseCatcher()
 		add_pos = true
-	case l_one_or_more:
+	case L_one_or_more:
 		sub := s.atom(loop.Child, loop.Not)
 		s.writeMark(add_pos)
 		s.writeRuleFor()
@@ -316,10 +317,10 @@ func newRule(lang, name string) RuleProg {
 }
 
 func (s *PegCompiler) rule(rule Rule) {
-	r := newRule(s.lang, rule.name)
+	r := newRule(s.lang, rule.Name)
 	b := strings.Builder{}
 	capitalize := true
-	for _, r := range rule.name {
+	for _, r := range rule.Name {
 		if capitalize {
 			r2 := unicode.ToUpper(r)
 			b.WriteRune(r2)
@@ -333,7 +334,7 @@ func (s *PegCompiler) rule(rule Rule) {
 			capitalize = true
 		}
 	}
-	r.body(rule.body)
+	r.body(rule.Body)
 	r.writeReturnNull()
 	s.rules = append(s.rules, r)
 }
@@ -365,7 +366,8 @@ func (s *PegCompiler) Compile(path string) {
 	finalProg := `package @2
 
 import (
-	"github.com/Rotfuchs-von-Vulpes/langKit"
+	"test/regex"
+	"test/scanner"
 )
 
 type Node struct {
@@ -374,12 +376,35 @@ type Node struct {
 	Children []Node
 }
 
+type parseResult struct {
+	ok      bool
+	node    Node
+	nextPos int
+}
+
+type cacheKey struct {
+	rule string
+	pos  int
+}
+
 type @1 struct {
-	scanner langKit.Scanner
+	scanner scanner.Scanner
+	cache   map[cacheKey]parseResult
 }
 
 func Get@1Parser(text string) @1 {
-	return @1{langKit.GetScanner(text)}
+	return @1{scanner.GetScanner(text), make(map[cacheKey]parseResult)}
+}
+
+func (s *@1) memoize(ruleName string, parseFunc func() parseResult) parseResult {
+	key := cacheKey{ruleName, s.scanner.Mark()}
+    if result, found := s.cache[key]; found {
+		s.scanner.Reset(result.nextPos)
+        return result
+    }
+    result := parseFunc()
+    s.cache[key] = result
+    return result
 }
 
 `
@@ -389,7 +414,7 @@ func Get@1Parser(text string) @1 {
 		finalProg += s.eachSubRule(rule)
 		finalProg += rule.program + "\n\n"
 	}
-	finalProg += "func (s *" + s.lang + ") Parse() (bool, Node) {\n\treturn s." + s.data.Rules[0].name + "()\n}"
+	finalProg += "func (s *" + s.lang + ") Parse() (bool, Node) {\n\tres := s.m_" + s.data.Rules[0].Name + "()\n\treturn res.ok, res.node\n}"
 	os.Mkdir(path+name+"/", os.ModePerm)
 	os.Remove(fmt.Sprintf(path+"%s/%s.go", name, name))
 	os.WriteFile(fmt.Sprintf(path+"%s/%s.go", name, name), []byte(finalProg), fs.ModeAppend)
