@@ -319,12 +319,9 @@ func UseStack(stack []State, str string) bool {
 	return test(stack, runes, 0, 0, false, false)
 }
 
-var memo map[string][]State
+var memo = make(map[string][]State)
 
 func run(regex, str string) bool {
-	if memo == nil {
-		memo = make(map[string][]State)
-	}
 	if s, ok := memo[regex]; ok {
 		return UseStack(s, str)
 	}
