@@ -84,6 +84,8 @@ func (s *RuleProg) writeNewPos() {
 }
 
 func (s *RuleProg) writeReset() {
+	s.write("@3fields = []string{}@1")
+	s.write("@3nodes = []Node{}@1")
 	s.write("@3s.scanner.Reset(pos)@1")
 }
 
@@ -290,9 +292,11 @@ func (s *RuleProg) body(body Body) {
 	}
 	if len(body.Alts) > 1 {
 		s.writeMark(false)
-		for _, alt := range body.Alts {
+		for i, alt := range body.Alts {
 			s.alternative(alt)
-			s.writeReset()
+			if i < len(body.Alts)-1 {
+				s.writeReset()
+			}
 		}
 	} else {
 		s.alternative(body.Alts[0])

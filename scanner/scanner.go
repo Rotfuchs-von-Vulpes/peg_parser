@@ -48,18 +48,6 @@ func (s *Scanner) Reset(p int) {
 }
 
 func (s *Scanner) Expect(arg rune) bool {
-	if arg == 0 {
-		for {
-			if ok := s.Expect(' '); ok {
-				continue
-			} else if ok := s.Expect('\n'); ok {
-				continue
-			} else if ok := s.Expect('\r'); ok {
-				continue
-			}
-			break
-		}
-	}
 	r := s.PeekRune()
 	if r == arg {
 		s.pos += 1
