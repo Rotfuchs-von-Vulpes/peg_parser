@@ -230,12 +230,56 @@ func meta(r, meta rune) bool {
 		if r != 0 {
 			return true
 		}
+	case 'c':
+		if unicode.IsControl(r) {
+			return true
+		}
+	case 's':
+		if unicode.IsSpace(r) {
+			return true
+		}
+	case 'S':
+		if !unicode.IsSpace(r) {
+			return true
+		}
+	case 'p':
+		if unicode.IsPrint(r) {
+			return true
+		}
 	case 'w':
 		if unicode.IsLetter(r) {
 			return true
 		}
+	case 'W':
+		if !unicode.IsLetter(r) {
+			return true
+		}
+	case 'l':
+		if unicode.IsLower(r) {
+			return true
+		}
+	case 'u':
+		if unicode.IsUpper(r) {
+			return true
+		}
 	case 'a':
 		if r >= '0' && r <= '9' {
+			return true
+		}
+	case 'A':
+		if r < '0' || r > '9' {
+			return true
+		}
+	case 'x':
+		if slices.Contains([]rune("abcdefABCDEF0123456789"), r) {
+			return true
+		}
+	case 'g':
+		if unicode.IsGraphic(r) {
+			return true
+		}
+	case 'z':
+		if unicode.IsPunct(r) {
 			return true
 		}
 	case 'r':
@@ -248,6 +292,14 @@ func meta(r, meta rune) bool {
 		}
 	case 't':
 		if r == '\t' {
+			return true
+		}
+	case 'v':
+		if r == '\v' {
+			return true
+		}
+	case 'f':
+		if r == '\f' {
 			return true
 		}
 	case 'b':
