@@ -1,10 +1,8 @@
 package peg
 
 import (
-	"fmt"
 	"pegParser/regex"
 	sc "pegParser/scanner"
-	"strings"
 )
 
 type Node2 struct {
@@ -81,6 +79,8 @@ func (s *Peg) Expect(typ tokenKind) (bool, string) {
 	if t.typ == typ {
 		s.pos += 1
 		return true, t.value
+	} else if typ == t_space {
+		return true, ""
 	}
 	return false, ""
 }
@@ -112,10 +112,10 @@ func (s *Peg) grammar() (bool, Grammar) {
 			}
 		}
 		s.Reset(pos)
-		if ok, _ := s.Expect(t_end); ok {
-			return true, Grammar{nodes}
-		} else {
-			fmt.Println(s.pos, s.tokens[s.pos])
+		if ok, _ := s.Expect(t_space); ok {
+			if ok, _ := s.Expect(t_end); ok {
+				return true, Grammar{nodes}
+			}
 		}
 	}
 	return false, Grammar{}
@@ -123,9 +123,15 @@ func (s *Peg) grammar() (bool, Grammar) {
 
 func (s *Peg) rule() (bool, Rule) {
 	if ok, name := s.name(); ok {
-		if ok := s.String(":"); ok {
-			if ok, body := s.body(); ok {
-				return true, Rule{name, body}
+		if ok, _ := s.Expect(t_space); ok {
+			if ok := s.String(":"); ok {
+				if ok, _ := s.Expect(t_space); ok {
+					if ok, body := s.body(); ok {
+						if ok, _ := s.Expect(t_space); ok {
+							return true, Rule{name, body}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -133,9 +139,13 @@ func (s *Peg) rule() (bool, Rule) {
 }
 
 func (s *Peg) body_1() (bool, Alternative) {
-	if ok := s.String("|"); ok {
-		if ok, alternative := s.alternative(); ok {
-			return true, alternative
+	if ok, _ := s.Expect(t_space); ok {
+		if ok := s.String("|"); ok {
+			if ok, _ := s.Expect(t_space); ok {
+				if ok, alternative := s.alternative(); ok {
+					return true, alternative
+				}
+			}
 		}
 	}
 	return false, Alternative{}
@@ -160,13 +170,22 @@ func (s *Peg) body() (bool, Body) {
 	return false, Body{}
 }
 
+func (s *Peg) alternative_1() (bool, Loop) {
+	if ok, _ := s.Expect(t_space); ok {
+		if ok, loop := s.loop(); ok {
+			return true, loop
+		}
+	}
+	return false, Loop{}
+}
+
 func (s *Peg) alternative() (bool, Alternative) {
 	nodes := []Loop{}
 	if ok, loop := s.loop(); ok {
 		nodes = append(nodes, loop)
 		pos := s.Mark()
 		for {
-			if ok, loop := s.loop(); ok {
+			if ok, loop := s.alternative_1(); ok {
 				nodes = append(nodes, loop)
 				pos = s.Mark()
 			} else {
@@ -214,9 +233,13 @@ func (s *Peg) atom() (bool, Node) {
 	}
 	s.Reset(pos)
 	if ok := s.String("("); ok {
-		if ok, body := s.body(); ok {
-			if ok := s.String(")"); ok {
-				return true, body
+		if ok, _ := s.Expect(t_space); ok {
+			if ok, body := s.body(); ok {
+				if ok, _ := s.Expect(t_space); ok {
+					if ok := s.String(")"); ok {
+						return true, body
+					}
+				}
 			}
 		}
 	}
@@ -257,7 +280,6 @@ func (s *Peg) item() (bool, Literal) {
 	}
 	pos = s.Mark()
 	if ok := s.String("ENDMARKER"); ok {
-		fmt.Println("oxe")
 		return true, Literal{L_literal, false, "", "ENDMARKER"}
 	}
 	s.Reset(pos)
@@ -322,40 +344,30 @@ type token struct {
 }
 
 func tokenize(scanner sc.Scanner) (final []token) {
-	last_literal := strings.Builder{}
-	add := func(typ tokenKind, str string) {
-		if last_literal.Len() > 0 {
-			final = append(final, token{t_punct, last_literal.String()})
-			last_literal.Reset()
-		}
-		if typ != t_space {
-			final = append(final, token{typ, str})
-		}
-	}
 	for {
 		if scanner.Expect(0) {
 			break
 		}
 		pos := scanner.Mark()
 		if ok, _ := regex.RunRegex(&scanner, "( |\\t|\\n|\\r)+"); ok {
-			add(t_space, "")
+			final = append(final, token{t_space, ""})
 			continue
 		}
 		scanner.Reset(pos)
 		if ok := scanner.String("ENDMARKER"); ok {
-			add(t_punct, "ENDMARKER")
+			final = append(final, token{t_punct, "ENDMARKER"})
 			continue
 		}
 		scanner.Reset(pos)
 		if ok, str := regex.RunRegex(&scanner, "(\\w|\\a|_)+"); ok {
-			add(t_identifier, str)
+			final = append(final, token{t_identifier, str})
 			continue
 		}
 		scanner.Reset(pos)
 		if ok := scanner.String("\""); ok {
 			if ok, str := regex.RunRegex(&scanner, "((\")!.)+"); ok {
 				if ok := scanner.String("\""); ok {
-					add(t_string, str)
+					final = append(final, token{t_string, str})
 					continue
 				}
 			}
@@ -364,7 +376,7 @@ func tokenize(scanner sc.Scanner) (final []token) {
 		if ok := scanner.String("'"); ok {
 			if ok, str := regex.RunRegex(&scanner, "((')!.)+"); ok {
 				if ok := scanner.String("'"); ok {
-					add(t_string, str)
+					final = append(final, token{t_string, str})
 					continue
 				}
 			}
@@ -373,21 +385,20 @@ func tokenize(scanner sc.Scanner) (final []token) {
 		if ok := scanner.String("["); ok {
 			if ok, str := regex.RunRegex(&scanner, "\\b+"); ok {
 				if ok := scanner.String("]"); ok {
-					add(t_regex, str)
+					final = append(final, token{t_regex, str})
 					continue
 				}
 			}
 		}
 		scanner.Reset(pos)
 		if ok, r := scanner.Rune(); ok {
-			last_literal.WriteRune(r)
+			final = append(final, token{t_punct, string(r)})
 			continue
 		} else {
 			break
 		}
 	}
 	final = append(final, token{t_end, ""})
-	fmt.Println(final)
 	return final
 }
 
