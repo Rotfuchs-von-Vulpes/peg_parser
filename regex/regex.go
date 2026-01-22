@@ -317,42 +317,74 @@ func meta(r, meta rune) bool {
 			return true
 		}
 	default:
-		if r == meta {
+		if slices.Contains([]rune("()[]{}.|+*?!"), meta) && r == meta {
 			return true
 		}
 	}
 	return false
 }
 
-func test(stack []State, runes []rune, index, pos int, inside_not bool, fromFront bool) bool {
+type ResultCode int
+
+const (
+	UnexpectedEnd ResultCode = iota
+	UnexpectedMore
+	UnexpectedRune
+	Matched
+)
+
+func test(stack []State, runes []rune, index, pos int, inside_not bool, fromFront bool) (ResultCode, bool) {
 	s := stack[pos]
 	if index > len(runes)-1 {
-		return false
+		return UnexpectedEnd, false
 	}
 	r := runes[index]
 	nullNextList := []int{}
+	var final ResultCode
 	for _, next := range s.next {
 		switch next.Typ {
 		case t_rune:
-			if r == next.Value && test(stack, runes, index+1, next.ID, inside_not, false) {
-				return true
+			switch r {
+			case next.Value:
+				res, ok := test(stack, runes, index+1, next.ID, inside_not, false)
+				if ok {
+					return Matched, true
+				} else {
+					final = res
+				}
+			case 0:
+				final = UnexpectedEnd
+			default:
+				final = UnexpectedRune
 			}
 		case t_meta:
-			if meta(r, next.Value) && test(stack, runes, index+1, next.ID, inside_not, false) {
-				return true
+			if meta(r, next.Value) {
+				res, ok := test(stack, runes, index+1, next.ID, inside_not, false)
+				if ok {
+					return Matched, true
+				} else {
+					final = res
+				}
+			} else if r == 0 {
+				final = UnexpectedEnd
+			} else {
+				final = UnexpectedRune
 			}
 		case t_not:
-			if test(stack, runes, index, next.ID, true, fromFront) {
-				return false
+			res, ok := test(stack, runes, index, next.ID, true, fromFront)
+			if ok {
+				return UnexpectedRune, false
+			} else {
+				final = res
 			}
 		case t_end:
 			if inside_not {
-				return true
+				return Matched, true
 			} else {
 				if pos == len(stack)-1 && index == len(runes)-1 {
-					return true
+					return Matched, true
 				} else {
-					return false
+					return UnexpectedMore, false
 				}
 			}
 		case t_jump:
@@ -365,15 +397,18 @@ func test(stack []State, runes []rune, index, pos int, inside_not bool, fromFron
 			if next < pos && fromFront {
 				continue
 			}
-			if test(stack, runes, index, next, inside_not, fromFront || next < pos) {
-				return true
+			res, ok := test(stack, runes, index, next, inside_not, fromFront || next < pos)
+			if ok {
+				return Matched, true
+			} else {
+				final = res
 			}
 		}
 	}
-	return false
+	return final, false
 }
 
-func UseStack(stack []State, str string) bool {
+func UseStack(stack []State, str string) (ResultCode, bool) {
 	runes := []rune(str)
 	runes = append(runes, 0)
 	return test(stack, runes, 0, 0, false, false)
@@ -381,7 +416,7 @@ func UseStack(stack []State, str string) bool {
 
 var memo = make(map[string][]State)
 
-func run(regex, str string) bool {
+func run(regex, str string) (ResultCode, bool) {
 	if s, ok := memo[regex]; ok {
 		return UseStack(s, str)
 	}
@@ -398,17 +433,23 @@ func run(regex, str string) bool {
 func RunRegex(s *scanner.Scanner, rule string) (bool, string) {
 	buffer := strings.Builder{}
 	cuttoff := false
-	if run(rule, "") {
-		cuttoff = true
+	{
+		_, ok := run(rule, "")
+		if ok {
+			cuttoff = true
+		}
 	}
 	pos := s.Mark()
 	for {
 		if ok, r := s.Rune(); ok {
-			if run(rule, buffer.String()+string(r)) {
+			res, ok := run(rule, buffer.String()+string(r))
+			if ok {
 				cuttoff = true
 			} else if cuttoff {
 				s.Reset(pos)
 				return true, buffer.String()
+			} else if res == UnexpectedRune {
+				// return false, ""
 			}
 			pos = s.Mark()
 			buffer.WriteRune(r)
