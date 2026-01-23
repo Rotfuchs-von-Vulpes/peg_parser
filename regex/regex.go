@@ -3,6 +3,7 @@ package regex
 import (
 	"fmt"
 	"pegParser/scanner"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -84,7 +85,7 @@ func (s *Stack) char(char Node) {
 	case "rune":
 		s.run(child)
 	default:
-		panic("char has illegal child")
+		panic("char has illegal child: " + child.Typ)
 	}
 }
 
@@ -104,8 +105,10 @@ func (s *Stack) atom(atom Node) {
 		s.char(child)
 	case "capture":
 		s.capture(child)
+	case "set":
+		s.set(child)
 	default:
-		panic("char has illegal child")
+		panic("atom has illegal child: " + child.Typ)
 	}
 }
 
@@ -121,7 +124,7 @@ func (s *Stack) mode(mode Node) {
 	}
 	child := mode.Children[0]
 	if child.Typ != "atom" {
-		panic("mode has illegal child")
+		panic("mode has illegal child: " + child.Typ)
 	}
 	mark := s.count
 	add_not := len(mode.Children) == 2 && mode.Children[1].Value == "!"
@@ -134,7 +137,7 @@ func (s *Stack) mode(mode Node) {
 	if len(mode.Children) == 2 {
 		repeat := mode.Children[1]
 		if repeat.Typ != "string" {
-			panic("mode has illegal child")
+			panic("mode has illegal child: " + repeat.Typ)
 		}
 		switch repeat.Value {
 		case "?":
@@ -153,7 +156,7 @@ func (s *Stack) mode(mode Node) {
 			s.states = append(s.states, State{s.count, []StateIn{}})
 			s.states[s.count].next = append(s.states[s.count].next, StateIn{mark, t_jump, 0}, StateIn{s.count + 1, t_jump, 0})
 		default:
-			panic("Illegal mode literal")
+			panic("Illegal mode literal: " + repeat.Value)
 		}
 	}
 }
@@ -201,6 +204,33 @@ func (s *Stack) capture(capture Node) {
 		}
 		s.states = s.states[0 : len(s.states)-1]
 		s.count -= 1
+	}
+}
+
+func (s *Stack) set(set Node) {
+	if set.Typ != "set" {
+		panic(getUnexpectedTypeError("set", set.Typ))
+	}
+	if len(set.Children) == 0 {
+		panic("No set children was unexpected")
+	}
+	switch set.Value {
+	case "not":
+		nodes := []Node{}
+		for _, el := range set.Children {
+			nodes = append(nodes, Node{"group", "", []Node{{"mode", "", []Node{{"atom", "", []Node{el}}}}}})
+		}
+		mode1 := Node{"mode", "", []Node{{"atom", "", []Node{{"capture", "", nodes}}}, {"string", "!", []Node{}}}}
+		mode2 := Node{"mode", "", []Node{{"atom", "", []Node{{"char", "", []Node{{"meta", ".", []Node{}}}}}}}}
+		s.capture(Node{"capture", "", []Node{{"group", "", []Node{mode1, mode2}}}})
+	case "":
+		nodes := []Node{}
+		for _, el := range set.Children {
+			nodes = append(nodes, Node{"group", "", []Node{{"mode", "", []Node{{"atom", "", []Node{el}}}}}})
+		}
+		s.capture(Node{"capture", "", nodes})
+	default:
+		panic("set has illegal value: " + set.Value)
 	}
 }
 
@@ -355,6 +385,7 @@ func test(stack []State, runes []rune, index, pos int, inside_not bool, fromFron
 			case 0:
 				final = UnexpectedEnd
 			default:
+				fmt.Println("rune", r, string(r), next.Value)
 				final = UnexpectedRune
 			}
 		case t_meta:
@@ -368,22 +399,26 @@ func test(stack []State, runes []rune, index, pos int, inside_not bool, fromFron
 			} else if r == 0 {
 				final = UnexpectedEnd
 			} else {
+				fmt.Println("meta")
 				final = UnexpectedRune
 			}
 		case t_not:
 			res, ok := test(stack, runes, index, next.ID, true, fromFront)
 			if ok {
+				fmt.Println("not")
 				return UnexpectedRune, false
 			} else {
 				final = res
 			}
 		case t_end:
+			fmt.Println("hm")
 			if inside_not {
 				return Matched, true
 			} else {
 				if pos == len(stack)-1 && index == len(runes)-1 {
 					return Matched, true
 				} else {
+					fmt.Println("hm")
 					return UnexpectedMore, false
 				}
 			}
@@ -408,7 +443,121 @@ func test(stack []State, runes []rune, index, pos int, inside_not bool, fromFron
 	return final, false
 }
 
+func getNestedRegex(stack []State, id int) (final []State) {
+	notCount := 1
+	init := id
+	for {
+		s := stack[init]
+		var s2 State
+		s2.id = s.id - id
+		init++
+		for _, next := range s.next {
+			n := StateIn{next.ID - id, next.Typ, next.Value}
+			s2.next = append(s2.next, n)
+			switch next.Typ {
+			case t_not:
+				notCount += 1
+			case t_end:
+				notCount -= 1
+				if notCount == 0 {
+					final = append(final, s2)
+					return final
+				}
+			}
+		}
+		final = append(final, s2)
+	}
+}
+
+type backTrack struct {
+	pos     int
+	index   int
+	count   int
+	choices []int
+}
+
+func RunStack(stack []State, str string) (ResultCode, bool) {
+	fmt.Println(stack)
+	pos := 0
+	index := 0
+	runes := []rune(str)
+	runes = append(runes, 0)
+	pointList := []backTrack{}
+	var final ResultCode
+loop:
+	for {
+		s := stack[pos]
+		if index > len(runes)-1 {
+			return UnexpectedEnd, false
+		}
+		r := runes[index]
+		nullNextList := []int{}
+		for _, next := range s.next {
+			switch next.Typ {
+			case t_rune:
+				switch r {
+				case next.Value:
+					index += 1
+					pos = next.ID
+					continue loop
+				case 0:
+					final = UnexpectedEnd
+				default:
+					// fmt.Println("rune", r, string(r), next.Value)
+					final = UnexpectedRune
+				}
+			case t_meta:
+				if meta(r, next.Value) {
+					index += 1
+					pos = next.ID
+					continue loop
+				} else if r == 0 {
+					final = UnexpectedEnd
+				} else {
+					final = UnexpectedRune
+				}
+			case t_not:
+				res, ok := RunStack(getNestedRegex(stack, next.ID), string(runes[index:len(runes)-1]))
+				if ok || res == Matched || res == UnexpectedMore {
+					return UnexpectedRune, false
+				}
+			case t_end:
+				if pos == len(stack)-1 && index == len(runes)-1 || r == 0 {
+					return Matched, true
+				} else {
+					return UnexpectedMore, false
+				}
+			case t_jump:
+				nullNextList = append(nullNextList, next.ID)
+			}
+		}
+		if len(nullNextList) > 0 {
+			slices.Sort(nullNextList)
+			choices := nullNextList
+			pointList = append(pointList, backTrack{pos, index, 0, choices})
+		}
+		if len(pointList) > 0 {
+			p := pointList[len(pointList)-1]
+			if p.count > len(p.choices)-1 {
+				if len(pointList) <= 1 {
+					return final, false
+				}
+				pointList = pointList[:len(pointList)-1]
+				p = pointList[len(pointList)-1]
+			}
+			index = p.index
+			next := p.choices[p.count]
+			pointList[len(pointList)-1].count += 1
+			pos = next
+			continue
+		} else {
+			return final, false
+		}
+	}
+}
+
 func UseStack(stack []State, str string) (ResultCode, bool) {
+	fmt.Println(stack)
 	runes := []rune(str)
 	runes = append(runes, 0)
 	return test(stack, runes, 0, 0, false, false)
@@ -418,7 +567,7 @@ var memo = make(map[string][]State)
 
 func run(regex, str string) (ResultCode, bool) {
 	if s, ok := memo[regex]; ok {
-		return UseStack(s, str)
+		return RunStack(s, str)
 	}
 	r := GetRegexParser(regex)
 	n := r.Parse()
@@ -427,10 +576,35 @@ func run(regex, str string) (ResultCode, bool) {
 	}
 	s := GetRegexStack(n)
 	memo[regex] = s
-	return UseStack(s, str)
+	return RunStack(s, str)
 }
 
+var memo2 = make(map[string]*regexp.Regexp)
+
 func RunRegex(s *scanner.Scanner, rule string) (bool, string) {
+	// var r *regexp.Regexp
+	// if rr, ok := memo2[rule]; ok {
+	// 	r = rr
+	// } else {
+	// 	r = regexp.MustCompile(rule)
+	// 	r.Longest()
+	// 	memo2[rule] = r
+	// }
+	// pos := s.Mark()
+	// text := s.Text()
+	// loc := r.FindStringIndex(text)
+	// if loc == nil {
+	// 	return false, ""
+	// } else {
+	// 	matched := text[loc[0]:loc[1]]
+	// 	if loc[0] == 0 {
+	// 		s.Reset(pos + loc[1] + 1)
+	// 		return true, matched
+	// 	} else {
+	// 		return false, ""
+	// 	}
+	// }
+
 	buffer := strings.Builder{}
 	cuttoff := false
 	{
@@ -448,8 +622,8 @@ func RunRegex(s *scanner.Scanner, rule string) (bool, string) {
 			} else if cuttoff {
 				s.Reset(pos)
 				return true, buffer.String()
-			} else if res == UnexpectedRune {
-				// return false, ""
+			} else if res == UnexpectedRune || res == UnexpectedMore {
+				return false, ""
 			}
 			pos = s.Mark()
 			buffer.WriteRune(r)

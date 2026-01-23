@@ -118,6 +118,32 @@ func (s *Regex) mode() Node {
 func (s *Regex) atom() Node {
 	nodes := []Node{}
 	pos := s.scanner.Mark()
+	if ok := s.scanner.String("["); ok {
+		not := false
+		if ok := s.scanner.String("^"); ok {
+			not = true
+		}
+		pos := s.scanner.Mark()
+		first := true
+		for {
+			if element := s.element(first); element.Typ != "" {
+				nodes = append(nodes, element)
+				pos = s.scanner.Mark()
+			} else {
+				break
+			}
+			first = false
+		}
+		s.scanner.Reset(pos)
+		if ok := s.scanner.String("]"); ok {
+			value := ""
+			if not {
+				value = "not"
+			}
+			return Node{"atom", "", []Node{{"set", value, nodes}}}
+		}
+	}
+	s.scanner.Reset(pos)
 	if char := s.char(); char.Typ != "" {
 		nodes = append(nodes, char)
 		return Node{"atom", "", nodes}
@@ -130,6 +156,36 @@ func (s *Regex) atom() Node {
 				return Node{"atom", "", nodes}
 			}
 		}
+	}
+	s.scanner.Reset(pos)
+	return Node{}
+}
+
+func (s *Regex) element(first bool) Node {
+	nodes := []Node{}
+	pos := s.scanner.Mark()
+	if ok := s.scanner.String("\\"); ok {
+		if ok, r := s.scanner.Rune(); ok {
+			if r == '(' || r == ')' || r == '[' || r == ']' || r == '+' || r == '*' || r == '?' || r == '!' || r == '|' || r == '.' {
+				nodes = append(nodes, Node{"rune", string(r), []Node{}})
+			} else {
+				nodes = append(nodes, Node{"meta", string(r), []Node{}})
+			}
+			return Node{"char", "", nodes}
+		}
+	}
+	s.scanner.Reset(pos)
+	if ok := s.scanner.String("."); ok {
+		nodes = append(nodes, Node{"meta", ".", []Node{}})
+		return Node{"char", "", nodes}
+	}
+	s.scanner.Reset(pos)
+	if ok, r := s.scanner.Rune(); ok {
+		if r == ']' && !first {
+			return Node{}
+		}
+		nodes = append(nodes, Node{"rune", string(r), []Node{}})
+		return Node{"char", "", nodes}
 	}
 	s.scanner.Reset(pos)
 	return Node{}
