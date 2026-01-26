@@ -163,3 +163,17 @@ func (s *Scanner) Name() (bool, string) {
 		return false, ""
 	}
 }
+
+func (s *Scanner) Text() string {
+	pos := s.Mark()
+	b := strings.Builder{}
+	for {
+		if ok, r := s.Rune(); ok {
+			b.WriteRune(r)
+		} else {
+			break
+		}
+	}
+	s.Reset(pos)
+	return b.String()
+}

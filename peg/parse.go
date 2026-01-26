@@ -349,7 +349,7 @@ func tokenize(scanner sc.Scanner) (final []token) {
 			break
 		}
 		pos := scanner.Mark()
-		if ok, _ := regex.RunRegex(&scanner, "( |\\t|\\n|\\r)+"); ok {
+		if ok, _ := regex.RunRegex(&scanner, "\\s+"); ok {
 			final = append(final, token{t_space, ""})
 			continue
 		}
@@ -359,13 +359,13 @@ func tokenize(scanner sc.Scanner) (final []token) {
 			continue
 		}
 		scanner.Reset(pos)
-		if ok, str := regex.RunRegex(&scanner, "(\\w|\\a|_)+"); ok {
+		if ok, str := regex.RunRegex(&scanner, "\\w+"); ok {
 			final = append(final, token{t_identifier, str})
 			continue
 		}
 		scanner.Reset(pos)
 		if ok := scanner.String("\""); ok {
-			if ok, str := regex.RunRegex(&scanner, "((\")!.)+"); ok {
+			if ok, str := regex.RunRegex(&scanner, "[^\"]+"); ok {
 				if ok := scanner.String("\""); ok {
 					final = append(final, token{t_string, str})
 					continue
@@ -374,7 +374,7 @@ func tokenize(scanner sc.Scanner) (final []token) {
 		}
 		scanner.Reset(pos)
 		if ok := scanner.String("'"); ok {
-			if ok, str := regex.RunRegex(&scanner, "((')!.)+"); ok {
+			if ok, str := regex.RunRegex(&scanner, "[^']+"); ok {
 				if ok := scanner.String("'"); ok {
 					final = append(final, token{t_string, str})
 					continue
@@ -382,9 +382,9 @@ func tokenize(scanner sc.Scanner) (final []token) {
 			}
 		}
 		scanner.Reset(pos)
-		if ok := scanner.String("["); ok {
-			if ok, str := regex.RunRegex(&scanner, "\\b+"); ok {
-				if ok := scanner.String("]"); ok {
+		if ok := scanner.String("/"); ok {
+			if ok, str := regex.RunRegex(&scanner, "[^/]+"); ok {
+				if ok := scanner.String("/"); ok {
 					final = append(final, token{t_regex, str})
 					continue
 				}
